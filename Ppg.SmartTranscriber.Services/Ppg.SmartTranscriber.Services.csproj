@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ppg.SmartTranscriber.Data\Ppg.SmartTranscriber.Data.csproj" />
+    <ProjectReference Include="..\Ppg.SmartTranscriber.Interfaces\Ppg.SmartTranscriber.Interfaces.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,81 +1,72 @@
-
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+
 using Minio;
+
+using Ppg.SmartTranscriber.API;
 using Ppg.SmartTranscriber.Data;
+using Ppg.SmartTranscriber.Interfaces;
+using Ppg.SmartTranscriber.Interfaces.Ppg.SmartTranscriber.Interfaces;
+using Ppg.SmartTranscriber.Services;
 
-namespace Ppg.SmartTranscriber.API
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddControllers(options =>
 {
-    public class Program
+    options.SuppressInputFormatterBuffering = true;
+});
+
+// Configure request size limits
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 1024L * 1024L * 1024L; // 1GB
+});
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// Configure request size limits
+builder.Services.Configure<IISServerOptions>(options =>
+{
+    options.MaxRequestBodySize = 1024 * 1024 * 1024; // 1GB
+});
+
+builder.Services.Configure<KestrelServerOptions>(options =>
+{
+    options.Limits.MaxRequestBodySize = 1024 * 1024 * 1024; // 1GB
+});
+
+// Configure Minio settings
+builder.Services.Configure<MinioSettings>(builder.Configuration.GetSection("Minio"));
+
+// Register Minio client
+builder.Services.AddMinioClient();
+
+// Register Minio service
+builder.Services.AddSingleton<IMinioService, MinioService>();
+
+// Register DbContext for PostgreSQL
+builder.Services.AddDbContext<SmartTranscriberDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("postgres")));
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
     {
-        public static void Main(string[] args)
-        {
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Add services to the container.
-
-            builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
-
-            builder.Services.AddMinioClient();
-
-
-            // Add this in your Program.cs, before builder.Build()
-            builder.Services.AddDbContext<SmartTranscriberDbContext>(options =>
-                options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-
-
-            var app = builder.Build();
-
-            // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
-
-            app.UseHttpsRedirection();
-
-            app.UseAuthorization();
-
-
-            app.MapControllers();
-
-            app.Run();
-        }
-
-        private static void AddMinioClient(WebApplicationBuilder builder)
-        {
-            builder.Services.AddSingleton<IMinioClient>(sp =>
-            {
-                var config = sp.GetRequiredService<IOptions<MinioSettings>>().Value;
-                var endpoint = config.Endpoint;
-                var useSsl = false;
-
-                if (endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                {
-                    useSsl = true;
-                    endpoint = endpoint["https://".Length..];
-                }
-                else if (endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-                {
-                    endpoint = endpoint["http://".Length..];
-                }
-
-                var minioClient = new MinioClient()
-                    .WithEndpoint(endpoint)
-                    .WithCredentials(config.AccessKey, config.SecretKey);
-
-                if (useSsl)
-                {
-                    minioClient = minioClient.WithSSL();
-                }
-
-                return minioClient.Build();
-            });
-        }
-    }
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Smart Transcriber API V1");
+        c.RoutePrefix = "swagger";
+    });
 }
+else
+{
+    app.UseHttpsRedirection();
+}
+
+app.UseAuthorization();
+app.MapControllers();
+app.Run();

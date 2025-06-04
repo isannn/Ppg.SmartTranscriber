@@ -1,0 +1,49 @@
+﻿@page "/transcript/{JobId:guid}"
+@inherits TranscriptViewBase
+
+<h2>Transcript for Job: @JobId</h2>
+
+@if (Segments.Count == 0)
+{
+    <p>No segments found.</p>
+}
+else
+{
+    <EditForm Model="this">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Speaker</th>
+                    <th>Text</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Segments.Count; i++)
+                {
+                    var s = Segments[i];
+                    <tr>
+                        <td>@s.StartTime.ToString(@"hh\:mm\:ss")</td>
+                        <td>@s.EndTime.ToString(@"hh\:mm\:ss")</td>
+                        <td>
+                            <input type="text"
+                                   @* @bind-value="s.Speaker" *@
+                                   @onchange="(e) => OnSpeakerChanged(s)" 
+                                   class="form-control-sm @(GetSpeakerColorClass(s.Speaker)) @(s.IsValidSpeaker ? "is-valid" : s.IsInvalidSpeaker ? "is-invalid" : "")"/>
+                        </td>
+                        <td>@s.Text</td>
+                        <td>
+                            <button type="button"
+                                    class="btn btn-sm btn-primary"
+                                    @onclick="() => SaveSpeakerAsync(s)">
+                                Save
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </EditForm>
+}

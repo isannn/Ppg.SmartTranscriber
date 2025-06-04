@@ -1,0 +1,57 @@
+﻿@page "/transcriptions"
+@inherits TranscriptionsBase
+
+<h2>Transcription Jobs</h2>
+
+@if (IsLoading)
+{
+    <p>Loading...</p>
+}
+else if (Jobs.Count == 0)
+{
+    <p>No transcription jobs found.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+        <tr>
+            <th>Job ID</th>
+            <th>Status</th>
+            <th>Created At</th>
+            <th>Transcript</th>
+            <th>Error</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var job in Jobs)
+        {
+            <tr>
+                <td>@job.Id</td>
+                <td>@job.Status</td>
+                <td>@job.CreatedAt.ToString("g")</td>
+                <td>
+                    @if (!string.IsNullOrWhiteSpace(job.TranscriptText))
+                    {
+                        <a href="@($"/transcript/{job.Id}")">View</a>
+                    }
+                    else
+                    {
+                        <span>-</span>
+                    }
+                </td>
+                <td>
+                    @if (!string.IsNullOrWhiteSpace(job.ErrorMessage))
+                    {
+                        <span class="text-danger">@job.ErrorMessage</span>
+                    }
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" @onclick="() => RefreshJobAsync(job.Id)">Refresh</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

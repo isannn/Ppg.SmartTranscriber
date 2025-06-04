@@ -1,27 +1,26 @@
 # See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
 
-# This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
-USER $APP_UID
 WORKDIR /app
+EXPOSE 80
+EXPOSE 443
 
-# This stage is used to build the service project
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["Ppg.SmartTranscriber.API/Ppg.SmartTranscriber.API.csproj", "Ppg.SmartTranscriber.API/"]
-RUN dotnet restore "./Ppg.SmartTranscriber.API/Ppg.SmartTranscriber.API.csproj"
+COPY ["Ppg.SmartTranscriber.Api/Ppg.SmartTranscriber.Api.csproj", "Ppg.SmartTranscriber.Api/"]
+COPY ["Ppg.SmartTranscriber.Data/Ppg.SmartTranscriber.Data.csproj", "Ppg.SmartTranscriber.Data/"]
+COPY ["Ppg.SmartTranscriber.Services/Ppg.SmartTranscriber.Services.csproj", "Ppg.SmartTranscriber.Services/"]
+RUN dotnet restore "Ppg.SmartTranscriber.Api/Ppg.SmartTranscriber.Api.csproj"
 COPY . .
-WORKDIR "/src/Ppg.SmartTranscriber.API"
-RUN dotnet build "./Ppg.SmartTranscriber.API.csproj" -c $BUILD_CONFIGURATION -o /app/build
+WORKDIR "/src/Ppg.SmartTranscriber.Api"
+RUN dotnet build "Ppg.SmartTranscriber.Api.csproj" -c Release -o /app/build
 
-# This stage is used to publish the service project to be copied to the final stage
 FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./Ppg.SmartTranscriber.API.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+WORKDIR "/src/Ppg.SmartTranscriber.Api"
+RUN dotnet publish "Ppg.SmartTranscriber.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-# This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "Ppg.SmartTranscriber.API.dll"]
+RUN mkdir -p /https
+ENTRYPOINT ["dotnet", "Ppg.SmartTranscriber.Api.dll"]

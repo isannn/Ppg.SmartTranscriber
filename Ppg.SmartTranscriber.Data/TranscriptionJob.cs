@@ -8,6 +8,8 @@
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string? TranscriptText { get; set; }
         public string? ErrorMessage { get; set; }
-    }
 
+        public ICollection<TranscriptionSegment> Segments { get; set; } = new List<TranscriptionSegment>();
+
+    }
 }

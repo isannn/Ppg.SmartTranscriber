@@ -15,6 +15,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ppg.SmartTranscriber.Servic
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ppg.SmartTranscriber.Data", "Ppg.SmartTranscriber.Data\Ppg.SmartTranscriber.Data.csproj", "{48550BED-2EB1-428D-8A84-083E3626A37F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ppg.SmartTranscriber.Worker", "Ppg.SmartTranscriber.Worker\Ppg.SmartTranscriber.Worker.csproj", "{A9F1229C-FEAB-4455-9E11-3AB24968204F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ppg.SmartTranscriber.Web", "Ppg.SmartTranscriber.Web\Ppg.SmartTranscriber.Web.csproj", "{D6ACEC56-BC01-41B5-9F6D-622545580192}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ppg.SmartTranscriber.Interfaces", "Ppg.SmartTranscriber.Interfaces\Ppg.SmartTranscriber.Interfaces.csproj", "{35B27A23-A4C6-4C29-A098-729D9FD18870}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +39,18 @@ Global
 		{48550BED-2EB1-428D-8A84-083E3626A37F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{48550BED-2EB1-428D-8A84-083E3626A37F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{48550BED-2EB1-428D-8A84-083E3626A37F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A9F1229C-FEAB-4455-9E11-3AB24968204F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A9F1229C-FEAB-4455-9E11-3AB24968204F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A9F1229C-FEAB-4455-9E11-3AB24968204F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A9F1229C-FEAB-4455-9E11-3AB24968204F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D6ACEC56-BC01-41B5-9F6D-622545580192}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D6ACEC56-BC01-41B5-9F6D-622545580192}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D6ACEC56-BC01-41B5-9F6D-622545580192}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D6ACEC56-BC01-41B5-9F6D-622545580192}.Release|Any CPU.Build.0 = Release|Any CPU
+		{35B27A23-A4C6-4C29-A098-729D9FD18870}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{35B27A23-A4C6-4C29-A098-729D9FD18870}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{35B27A23-A4C6-4C29-A098-729D9FD18870}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{35B27A23-A4C6-4C29-A098-729D9FD18870}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

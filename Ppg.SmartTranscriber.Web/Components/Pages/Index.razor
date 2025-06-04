@@ -1,0 +1,16 @@
+﻿@page "/"
+@inherits IndexBase
+
+<h2>Upload Audio File</h2>
+
+<InputFile OnChange="OnInputFileChange" />
+
+<button class="btn btn-primary mt-2" @onclick="UploadFileAsync" disabled="@(!IsFileSelected)">Upload</button>
+
+@if (UploadResult != null)
+{
+    <div class="mt-4">
+        <strong>Job ID:</strong> @UploadResult.JobId <br />
+        <strong>Status:</strong> @UploadResult.Status
+    </div>
+}
