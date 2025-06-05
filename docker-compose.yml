@@ -67,13 +67,80 @@ services:
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
       ASPNETCORE_Kestrel__Certificates__Default__Password: YourSecurePassword123!
       ConnectionStrings__postgres: "Host=postgres;Port=5432;Database=db_transcription;Username=postgres;Password=postgres"
-      Minio__Endpoint: http://minio:9000
-      Minio__AccessKey: minio
-      Minio__SecretKey: minio123
-      Minio__BucketName: transcription-audio
+      Minio__Endpoint: "http://minio:9000"
+      Minio__AccessKey: "minioadmin"
+      Minio__SecretKey: "minioadmin"
+      Minio__BucketName: "transcriptions"
+      OTEL_LOG_LEVEL: "error"
+      OTEL_SDK_DISABLED: "true"
+      OTEL_TRACES_SAMPLER: "always_off"
+      OTEL_METRICS_EXPORTER: "none"
+      OTEL_LOGS_EXPORTER: "none"
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
     volumes:
       - ${APPDATA}/Microsoft/UserSecrets/aspnetcore-https:/https:ro
+      - aspnet_data_protection:/root/.aspnet/DataProtection-Keys
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
+        labels: "production_status,otel=false"
+        env: "os,customer"
+        mode: "non-blocking"
+        max-buffer-size: "25m"
+    networks:
+      - default
+
+  web:
+    build:
+      context: .
+      dockerfile: Ppg.SmartTranscriber.Web/Dockerfile
+      target: development
+    container_name: transcription_web
+    ports:
+      - "3000:80"
+      - "5000:5000"
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: "http://+:80"
+      ASPNETCORE_HTTP_PORTS: "80"
+      ASPNETCORE_HTTPS_PORTS: ""
+      DOTNET_WATCH_RESTART_ON_RUDE_EDIT: "true"
+      OTEL_LOG_LEVEL: "error"
+      OTEL_SDK_DISABLED: "true"
+      OTEL_TRACES_SAMPLER: "always_off"
+      OTEL_METRICS_EXPORTER: "none"
+      OTEL_LOGS_EXPORTER: "none"
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
+      ASPNETCORE_DATA_PROTECTION_KEY_PATH: "/root/.aspnet/DataProtection-Keys"
+      ASPNETCORE_DATA_PROTECTION_KEY_LIFETIME: "90"
+    volumes:
+      - ./Ppg.SmartTranscriber.Web:/src/Ppg.SmartTranscriber.Web
+      - aspnet_data_protection:/root/.aspnet/DataProtection-Keys:rw
+    user: "root"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
+        labels: "production_status,otel=false"
+        env: "os,customer"
+        mode: "non-blocking"
+        max-buffer-size: "25m"
+    networks:
+      - default
+
+networks:
+  default:
+    name: transcription_network
 
 volumes:
   pgdata:
   minio_data:
+  aspnet_data_protection:

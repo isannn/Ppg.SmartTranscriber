@@ -11,6 +11,15 @@ namespace Ppg.SmartTranscriber.Web.Components.Pages
         [Inject]
         public HttpClient Http { get; set; } = default!;
 
+        protected override void OnInitialized()
+        {
+            // Set the base address for HttpClient when running in Docker
+            if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true")
+            {
+                Http.BaseAddress = new Uri("http://api/");
+            }
+        }
+
         protected IBrowserFile? SelectedFile { get; set; }
         protected bool IsFileSelected => SelectedFile != null;
         protected UploadResultModel? UploadResult { get; set; }
@@ -19,6 +28,7 @@ namespace Ppg.SmartTranscriber.Web.Components.Pages
         {
             SelectedFile = e.File;
             UploadResult = null;
+            StateHasChanged();
         }
 
         protected async Task UploadFileAsync()
@@ -27,7 +37,7 @@ namespace Ppg.SmartTranscriber.Web.Components.Pages
                 return;
 
             var content = new MultipartFormDataContent();
-            var stream = SelectedFile.OpenReadStream(50 * 1024 * 1024); // 50 MB limit
+            var stream = SelectedFile.OpenReadStream(1024 * 1024 * 1024); // 50 MB limit
             content.Add(new StreamContent(stream)
             {
                 Headers =
@@ -48,7 +58,7 @@ namespace Ppg.SmartTranscriber.Web.Components.Pages
                 UploadResult = new UploadResultModel
                 {
                     JobId = "N/A",
-                    Status = "Upload failed"
+                    JobStatus = "Upload failed"
                 };
             }
         }
@@ -56,7 +66,7 @@ namespace Ppg.SmartTranscriber.Web.Components.Pages
         public class UploadResultModel
         {
             public string JobId { get; set; } = string.Empty;
-            public string Status { get; set; } = string.Empty;
+            public string JobStatus { get; set; } = string.Empty;
         }
     }
 }

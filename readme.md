@@ -96,3 +96,9 @@ Would you like me to:
 * Define a schema for storing transcripts (with speaker + timestamp) in PostgreSQL?
 
 Let me know where you'd like to start.
+
+
+command for deleteing containers and its full rebuild
+cls && docker compose down -v && docker compose --verbose up --build
+
+docker compose down -v # -v = remove old containers

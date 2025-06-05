@@ -12,6 +12,18 @@ using Ppg.SmartTranscriber.Interfaces.Ppg.SmartTranscriber.Interfaces;
 using Ppg.SmartTranscriber.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 builder.Services.AddControllers(options =>
 {
     options.SuppressInputFormatterBuffering = true;
