@@ -1,6 +1,6 @@
 # FR-001 — Implementation Plan
 
-Status: Draft
+Status: Approved
 
 ## Approach
 

@@ -62,7 +62,19 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
             "INSERT INTO transcription_jobs " +
             "(id, object_name, original_file_name, status, created_at, completed_at, error_message, model, language, duration_seconds) " +
             "VALUES (@Id, @ObjectName, @OriginalFileName, @Status, @CreatedAt, @CompletedAt, @ErrorMessage, @Model, @Language, @DurationSeconds)",
-            job);
+            new
+            {
+                job.Id,
+                job.ObjectName,
+                job.OriginalFileName,
+                Status = job.Status.ToString(),
+                job.CreatedAt,
+                job.CompletedAt,
+                job.ErrorMessage,
+                job.Model,
+                job.Language,
+                job.DurationSeconds
+            });
     }
 
     public async Task UpdateAsync(TranscriptionJob job, CancellationToken ct = default)
@@ -71,7 +83,17 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         await conn.ExecuteAsync(
             "UPDATE transcription_jobs SET status = @Status, completed_at = @CompletedAt, " +
             "error_message = @ErrorMessage, model = @Model, language = @Language, " +
-            "duration_seconds = @DurationSeconds WHERE id = @Id", job);
+            "duration_seconds = @DurationSeconds WHERE id = @Id",
+            new
+            {
+                job.Id,
+                Status = job.Status.ToString(),
+                job.CompletedAt,
+                job.ErrorMessage,
+                job.Model,
+                job.Language,
+                job.DurationSeconds
+            });
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)

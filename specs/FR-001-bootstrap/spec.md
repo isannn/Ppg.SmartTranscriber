@@ -1,6 +1,6 @@
 # FR-001 — Bootstrap & Clean-Architecture Restructure
 
-Status: Draft
+Status: Approved
 Jira: ST-1
 Card: `ppg_projects/SmartTranscriber` (`features.md` FR-001)
 

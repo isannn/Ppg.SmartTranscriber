@@ -46,11 +46,11 @@ public sealed class SegmentRepository(NpgsqlDataSource dataSource) : ISegmentRep
         var rows = await conn.QueryAsync<SearchHitDto>(
             "SELECT s.id AS SegmentId, s.job_id AS JobId, j.original_file_name AS OriginalFileName, " +
             "s.start_time AS StartTime, s.end_time AS EndTime, s.speaker AS Speaker, " +
-            "ts_headline('simple', s.text, plainto_tsquery('simple', @query)) AS Snippet " +
+            "ts_headline('russian', s.text, plainto_tsquery('russian', @query)) AS Snippet " +
             "FROM transcript_segments s " +
             "JOIN transcription_jobs j ON j.id = s.job_id " +
-            "WHERE s.text_vector @@ plainto_tsquery('simple', @query) " +
-            "ORDER BY ts_rank(s.text_vector, plainto_tsquery('simple', @query)) DESC " +
+            "WHERE s.text_vector @@ plainto_tsquery('russian', @query) " +
+            "ORDER BY ts_rank(s.text_vector, plainto_tsquery('russian', @query)) DESC " +
             "LIMIT @limit",
             new { query, limit });
         return rows.ToList();
