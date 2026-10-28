@@ -6,7 +6,7 @@ namespace SmartTranscriber.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/files")]
-public class FilesController(IJobService jobs, ILogger<FilesController> logger) : ControllerBase
+public class FilesController(IJobService jobs) : ControllerBase
 {
     /// <summary>
     /// Upload a media file: stored to MinIO, a Pending transcription job
