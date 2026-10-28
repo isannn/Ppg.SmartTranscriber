@@ -1,0 +1,40 @@
+using SmartTranscriber.Core.Domain;
+
+namespace SmartTranscriber.Core.Dto;
+
+public sealed record JobDto(
+    Guid Id,
+    string ObjectName,
+    string OriginalFileName,
+    string Status,
+    DateTime CreatedAt,
+    DateTime? CompletedAt,
+    string? ErrorMessage,
+    string? Model,
+    string? Language,
+    double? DurationSeconds,
+    int SegmentCount);
+
+public sealed record SegmentDto(
+    long Id,
+    double StartTime,
+    double EndTime,
+    string? Speaker,
+    string Text);
+
+public sealed record SpeakerUpdateRequest(string? Speaker);
+
+public sealed record TranscriptResult(
+    IReadOnlyList<TranscriptSegment> Segments,
+    string? Model,
+    double? DurationSeconds,
+    string? Language);
+
+public sealed record SearchHitDto(
+    long SegmentId,
+    Guid JobId,
+    string OriginalFileName,
+    double StartTime,
+    double EndTime,
+    string? Speaker,
+    string Snippet);

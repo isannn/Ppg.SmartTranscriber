@@ -1,0 +1,59 @@
+@page "/"
+@rendermode InteractiveServer
+@inject IJobService Jobs
+@inject NavigationManager Nav
+
+<PageTitle>Upload — SmartTranscriber</PageTitle>
+
+<h2>Upload media file</h2>
+
+<InputFile OnChange="OnFileSelected" />
+
+<button class="btn btn-primary mt-2" @onclick="UploadAsync" disabled="@(!CanUpload)">Upload</button>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger mt-3">@_error</div>
+}
+@if (_uploaded is not null)
+{
+    <div class="alert alert-success mt-3">
+        Job created: <a href="/jobs/@_uploaded.Id">@_uploaded.Id</a> — @_uploaded.Status
+    </div>
+}
+
+@code {
+    private IBrowserFile? _file;
+    private JobDto? _uploaded;
+    private string? _error;
+    private bool _busy;
+
+    private bool CanUpload => _file is not null && !_busy;
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _file = e.File;
+        _uploaded = null;
+        _error = null;
+    }
+
+    private async Task UploadAsync()
+    {
+        if (_file is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            await using var stream = _file.OpenReadStream(4L * 1024 * 1024 * 1024);
+            _uploaded = await Jobs.CreateJobAsync(_file.Name, stream, _file.ContentType);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
