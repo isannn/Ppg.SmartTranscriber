@@ -1,104 +1,97 @@
-I want to create app for audio transcribation. app based on .net 9. Fell free to ask additional questions?
+# SmartTranscriber
 
+Local, self-hosted audio/video transcription service. Single-user, no auth,
+fully offline (GigaAM v3 / Whisper models run locally).
 
+Two shapes from one codebase:
 
-1. audio sources - upload by user (from local files)
-2. tool for personal use only (for me), use localhost and so on if necessary
-3. output format - Timestamps/speaker identification
-4. Need to run it fully offline
-5. use Open-source models
-6. don't use any cloud services
-7. Small-scale (a few files manually uploaded)
-8. Platform - Razor pages + asp.net core web API
-9. use containers if necessary
-10. store uploaded audio files in s3 like storage and store output in db with full text search capabilities
-11. No authentication or authorization need
+1. **API service + Web UI** — ASP.NET Core REST endpoints + Blazor UI on
+   `http://127.0.0.1:8460`, deployable via `docker compose up`
+   (app + stt-svc + minio).
+2. **CLI** — `smarttranscriber` console for bots and scripts:
+   `transcribe <file>` standalone + `api` subcommands against the service.
 
+## Stack
 
-Excellent — your goals are clear, and you’ve made solid choices. Here’s a tailored architecture and tech stack suggestion for your offline, containerized audio transcription app:
+| Area | Choice |
+|------|--------|
+| Backend | .NET 9 ASP.NET Core + Blazor Server (merged host) |
+| Persistence | PostgreSQL `db_smarttranscriber` on `postgres-central-srv` :5433, Dapper + DbUp |
+| Media storage | MinIO (S3-compatible) |
+| STT | python FastAPI sidecar `tools/stt_svc` — GigaAM v3 / faster-whisper + pyannote diarization; whisper.cpp offline fallback |
+| CLI | `SmartTranscriber.Cli` |
 
----
+## Ports
 
-## ✅ **Tech Stack Overview**
+| Port | Service |
+|------|---------|
+| 8460 | API + Blazor UI |
+| 8461 | stt-svc (FastAPI) |
+| 8462 | MinIO console |
+| 8463 | MinIO S3 API |
 
-### 🔧 Backend (.NET 9 API)
+## API endpoints
 
-* **ASP.NET Core Web API** (for file uploads, processing trigger, and transcript access)
-* **PostgreSQL** with **PGroonga** or **pgvector + full-text search** for rich text querying
-* **Local Whisper model** (via [Whisper.cpp](https://github.com/ggerganov/whisper.cpp) or [CTranslate2](https://github.com/OpenNMT/CTranslate2))
-* Optional: **Background service** (e.g., using `IHostedService`) to process uploaded files
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/health` | health probe |
+| POST | `/api/v1/files` | upload media (multipart) → 202 + job |
+| GET | `/api/v1/jobs` | list jobs (`?status=&limit=&offset=`) |
+| GET | `/api/v1/jobs/{id}` | job detail |
+| DELETE | `/api/v1/jobs/{id}` | delete job (`?deleteFile=true`) |
+| GET | `/api/v1/jobs/{id}/segments` | timestamped segments |
+| PUT | `/api/v1/segments/{id}/speaker` | rename speaker |
+| GET | `/api/v1/jobs/{id}/transcript?format=txt|json` | rendered transcript |
+| GET | `/api/v1/search?q=&limit=` | full-text search over segments |
 
-### 🌐 Frontend (Razor Pages)
+Swagger UI: `http://127.0.0.1:8460/swagger`.
 
-* Upload UI with progress
-* View/search transcripts with timestamps
-* Playback audio with transcript sync (optional)
+## CLI
 
-### 🗂️ Storage
+```powershell
+# standalone transcription (stt sidecar -> whisper.cpp fallback)
+smarttranscriber transcribe "I:\records\interview.mp4" -o out.txt
 
-* **MinIO** as an S3-compatible local storage (runs in Docker)
-* Store audio + transcription files (JSON/text)
+# against a running service
+smarttranscriber api upload "I:\records\interview.mp4"
+smarttranscriber api jobs --status Done
+smarttranscriber api transcript <job-id> -o transcript.txt
+smarttranscriber api search "kubernetes"
 
-### 🐳 Containers
-
-* Docker Compose setup for:
-
-  * ASP.NET Core app
-  * PostgreSQL + extensions
-  * MinIO
-  * Optional transcription worker container
-
----
-
-## 🔁 High-Level Workflow
-
-1. **User uploads an audio file** (Razor Page → API)
-2. **API saves file to MinIO**
-3. **API writes a record** to PostgreSQL: file path, status = pending
-4. **Background service** or separate worker picks up pending files
-5. **Transcription tool (e.g., Whisper.cpp)** is executed via command line
-6. **Parsed transcription with timestamps/speakers** stored in DB
-7. Razor UI allows **searching**, **browsing**, **downloading** transcripts
-
----
-
-## 📁 Project Structure
-
-```bash
-/TranscriptionApp
-├── TranscriptionApp.Web         # Razor Pages frontend
-├── TranscriptionApp.API         # ASP.NET Core Web API
-├── TranscriptionApp.Worker      # Optional background processing container
-├── docker-compose.yml
-├── whisper.cpp/                 # Cloned whisper.cpp repo
-└── .env                         # Configs for MinIO, PostgreSQL
+# apply DB migrations
+smarttranscriber db migrate
 ```
 
----
+Publish single-file for bots:
+`dotnet publish src/SmartTranscriber.Cli -c Release -r win-x64 --self-contained -p:PublishSingleFile=true`
 
-## 🧠 Transcription Engine (Offline)
+## Run
 
-* **[Whisper.cpp](https://github.com/ggerganov/whisper.cpp)** (C++ port of Whisper)
+Prerequisites: `SMARTTRANSCRIBER__ConnectionString` env
+(Npgsql `key=value` format) pointing at `db_smarttranscriber` on
+`postgres-central-srv` :5433.
 
-  * Lightweight, fast, CPU/GPU capable
-  * CLI tool, easy to call from C#
-* **Alternative**: `Whisper.NET` (less mature), or call Python via CLI
+```powershell
+# everything containerized (app + stt-svc + minio)
+docker compose up -d --build
 
----
+# or local dev: sidecar in the TranscribiroNova venv (GPU), app via dotnet
+ppg_projects\TranscribiroNova\.venv\Scripts\python.exe tools\stt_svc\main.py
+dotnet run --project src/SmartTranscriber.Api
+```
 
-## 🛠 Next Steps
+Config: `smarttranscriber.json` at repo root (ports, endpoints — no
+secrets); secrets via env only.
 
-Would you like me to:
+## Layout
 
-* Scaffold the `docker-compose.yml` for MinIO + PostgreSQL + API?
-* Generate the C# code for the file upload and processing API?
-* Show how to call `whisper.cpp` from C#?
-* Define a schema for storing transcripts (with speaker + timestamp) in PostgreSQL?
-
-Let me know where you'd like to start.
-
-
-command for deleteing containers and its full rebuild
-cls && docker compose down -v && docker compose --verbose up --build
-
-docker compose down -v # -v = remove old containers
+```
+src/SmartTranscriber.Core/          domain entities, ports, app services
+src/SmartTranscriber.Infrastructure/ Dapper repos, DbUp, MinIO, STT clients
+src/SmartTranscriber.Api/           REST /api/v1/* + Blazor UI (:8460)
+src/SmartTranscriber.Cli/           console client / standalone transcriber
+db/Migrations/                      DbUp SQL scripts
+tools/stt_svc/                      FastAPI STT sidecar
+tests/                              NUnit
+specs/                              spec-driven design docs
+```

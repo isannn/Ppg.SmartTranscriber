@@ -1,0 +1,23 @@
+# Install CUDA-enabled torch first (RTX 3080, CUDA 12.x):
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+# then:
+#   pip install -r requirements.txt
+
+torch>=2.4
+torchaudio>=2.4
+faster-whisper>=1.1.0
+pyannote.audio>=3.3.0
+python-dotenv>=1.0
+soundfile>=0.12
+fastapi>=0.115
+uvicorn>=0.30
+python-multipart>=0.0.9
+
+# GigaAM v3 backend (ONNX). onnxruntime-gpu replaces the CPU onnxruntime
+# wheel — do NOT install both; CPU-only machines can use `onnxruntime` instead:
+onnx-asr>=0.12.0
+onnxruntime-gpu==1.24.4; sys_platform == "win32"
+
+# CUDA runtime libs for faster-whisper/ctranslate2 on Windows (CUDA 12):
+nvidia-cublas-cu12; sys_platform == "win32"
+nvidia-cudnn-cu12; sys_platform == "win32"
