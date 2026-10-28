@@ -1,0 +1,29 @@
+{
+  "SmartTranscriber": {
+    "ConnectionString": "",
+    "Api": {
+      "BaseUrl": "http://127.0.0.1:8460"
+    },
+    "Minio": {
+      "Endpoint": "http://127.0.0.1:8463",
+      "AccessKey": "",
+      "SecretKey": "",
+      "BucketName": "transcriptions",
+      "UseSsl": false
+    },
+    "Stt": {
+      "SidecarUrl": "http://127.0.0.1:8461",
+      "WhisperCppPath": "",
+      "WhisperModelPath": "",
+      "DefaultModel": "gigaam-v3-e2e-rnnt",
+      "DefaultLanguage": "ru",
+      "Diarize": true,
+      "TimeoutSeconds": 3600
+    },
+    "Worker": {
+      "PollIntervalSeconds": 5,
+      "TempDir": "",
+      "Enabled": true
+    }
+  }
+}

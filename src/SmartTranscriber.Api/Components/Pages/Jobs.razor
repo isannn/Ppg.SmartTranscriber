@@ -1,0 +1,70 @@
+@page "/jobs"
+@rendermode InteractiveServer
+@inject IJobService JobService
+
+<PageTitle>Jobs — SmartTranscriber</PageTitle>
+
+<h2>Transcription jobs</h2>
+
+<button class="btn btn-sm btn-secondary mb-2" @onclick="LoadAsync">Refresh</button>
+
+@if (_jobs is null)
+{
+    <p>Loading…</p>
+}
+else if (_jobs.Count == 0)
+{
+    <p>No transcription jobs found.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>File</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Model</th>
+                <th>Error</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var job in _jobs)
+            {
+                <tr>
+                    <td>@job.OriginalFileName</td>
+                    <td>@job.Status</td>
+                    <td>@job.CreatedAt.ToString("g")</td>
+                    <td>@job.Model</td>
+                    <td>
+                        @if (!string.IsNullOrWhiteSpace(job.ErrorMessage))
+                        {
+                            <span class="text-danger">@job.ErrorMessage</span>
+                        }
+                    </td>
+                    <td>
+                        @if (job.Status == nameof(JobStatus.Done))
+                        {
+                            <a class="btn btn-sm btn-primary" href="/jobs/@job.Id">View</a>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<JobDto>? _jobs;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _jobs = await JobService.ListJobsAsync(null, 100, 0);
+    }
+}

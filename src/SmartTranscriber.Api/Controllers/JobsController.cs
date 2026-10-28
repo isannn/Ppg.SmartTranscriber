@@ -1,0 +1,63 @@
+using Microsoft.AspNetCore.Mvc;
+
+using SmartTranscriber.Core.Domain;
+using SmartTranscriber.Core.Services;
+
+namespace SmartTranscriber.Api.Controllers;
+
+[ApiController]
+[Route("api/v1/jobs")]
+public class JobsController(IJobService jobs, ITranscriptService transcripts) : ControllerBase
+{
+    [HttpGet]
+    public async Task<IActionResult> List(
+        [FromQuery] string? status,
+        [FromQuery] int limit = 50,
+        [FromQuery] int offset = 0,
+        CancellationToken ct = default)
+    {
+        JobStatus? parsed = status is null ? null : Enum.Parse<JobStatus>(status, ignoreCase: true);
+        var list = await jobs.ListJobsAsync(parsed, Math.Clamp(limit, 1, 500), Math.Max(0, offset), ct);
+        return Ok(list);
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetJob(Guid id, CancellationToken ct)
+    {
+        var job = await jobs.GetJobAsync(id, ct);
+        return job is null ? NotFound() : Ok(job);
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, [FromQuery] bool deleteFile = true, CancellationToken ct = default)
+    {
+        return await jobs.DeleteJobAsync(id, deleteFile, ct) ? NoContent() : NotFound();
+    }
+
+    [HttpGet("{id:guid}/segments")]
+    public async Task<IActionResult> GetSegments(Guid id, CancellationToken ct)
+    {
+        var segments = await transcripts.GetSegmentsAsync(id, ct);
+        return Ok(segments);
+    }
+
+    /// <summary>
+    /// Rendered transcript. format=txt (default, plain text) or json.
+    /// </summary>
+    [HttpGet("{id:guid}/transcript")]
+    public async Task<IActionResult> GetTranscript(Guid id, [FromQuery] string format = "txt", CancellationToken ct = default)
+    {
+        if (string.Equals(format, "json", StringComparison.OrdinalIgnoreCase))
+        {
+            var segments = await transcripts.GetSegmentsAsync(id, ct);
+            return Ok(segments);
+        }
+
+        var text = await transcripts.RenderTranscriptAsync(id, ct);
+        if (text is null)
+        {
+            return NotFound();
+        }
+        return Content(text, "text/plain");
+    }
+}

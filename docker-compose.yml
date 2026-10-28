@@ -1,146 +1,73 @@
+name: smarttranscriber
+
 services:
-  postgres:
-    image: postgres:16
-    container_name: transcription_postgres
+  app:
+    build:
+      context: .
+      dockerfile: src/SmartTranscriber.Api/Dockerfile
+    container_name: smarttranscriber-app
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: db_transcription
     ports:
-      - "5432:5432"
+      - "127.0.0.1:8460:8460"
+    environment:
+      ASPNETCORE_URLS: "http://+:8460"
+      SmartTranscriber__ConnectionString: "${SMARTTRANSCRIBER__ConnectionString}"
+      SmartTranscriber__Minio__Endpoint: "http://s3:9000"
+      SmartTranscriber__Minio__AccessKey: "${S3_ACCESS_KEY:-minioadmin}"
+      SmartTranscriber__Minio__SecretKey: "${S3_SECRET_KEY:-minioadmin}"
+      SmartTranscriber__Stt__SidecarUrl: "http://stt-svc:8461"
+    depends_on:
+      s3:
+        condition: service_healthy
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - ./smarttranscriber.json:/app/smarttranscriber.json:ro
+    networks:
+      - smarttranscriber
 
-  minio:
-    image: minio/minio:latest
-    container_name: transcription_minio
-    command: server /data --console-address ":9001"
+  stt-svc:
+    build:
+      context: tools/stt_svc
+    container_name: smarttranscriber-stt
+    restart: unless-stopped
     ports:
-      - "9000:9000"  # S3 API
-      - "9001:9001"  # MinIO Console
+      - "127.0.0.1:8461:8461"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      STT_HOST: "0.0.0.0"
+      STT_PORT: "8461"
+      HF_TOKEN: "${HF_TOKEN:-}"
+      HF_HUB_OFFLINE: "${HF_HUB_OFFLINE:-0}"
     volumes:
-      - minio_data:/data
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - smarttranscriber
+
+  # S3-compatible object storage. rustfs is a MinIO-protocol-compatible
+  # drop-in (minio/* images are gated on Docker Hub/Quay/GHCR).
+  s3:
+    image: rustfs/rustfs:latest
+    container_name: smarttranscriber-s3
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8463:9000"   # S3 API
+      - "127.0.0.1:8462:9001"   # Console
+    environment:
+      RUSTFS_ACCESS_KEY: "${S3_ACCESS_KEY:-minioadmin}"
+      RUSTFS_SECRET_KEY: "${S3_SECRET_KEY:-minioadmin}"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes:
+      - s3_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/ -o /dev/null || curl -s http://localhost:9000/ -o /dev/null"]
       interval: 30s
-      timeout: 20s
+      timeout: 10s
       retries: 3
-
-  migrations:
-    build:
-      context: .
-      dockerfile: Ppg.SmartTranscriber.Data/Dockerfile
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__postgres: "Host=postgres;Port=5432;Database=db_transcription;Username=postgres;Password=postgres"
     networks:
-      - default
-
-  api:
-    build:
-      context: .
-      dockerfile: Ppg.SmartTranscriber.Api/Dockerfile
-    container_name: transcription_api
-    depends_on:
-      migrations:
-        condition: service_completed_successfully
-      minio:
-        condition: service_healthy
-    ports:
-      - "8080:80"   # HTTP
-      - "8081:443"  # HTTPS
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: "http://+:80;https://+:443"
-      ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      ASPNETCORE_Kestrel__Certificates__Default__Password: YourSecurePassword123!
-      ConnectionStrings__postgres: "Host=postgres;Port=5432;Database=db_transcription;Username=postgres;Password=postgres"
-      Minio__Endpoint: "http://minio:9000"
-      Minio__AccessKey: "minioadmin"
-      Minio__SecretKey: "minioadmin"
-      Minio__BucketName: "transcriptions"
-      OTEL_LOG_LEVEL: "error"
-      OTEL_SDK_DISABLED: "true"
-      OTEL_TRACES_SAMPLER: "always_off"
-      OTEL_METRICS_EXPORTER: "none"
-      OTEL_LOGS_EXPORTER: "none"
-      OTEL_EXPORTER_OTLP_ENDPOINT: ""
-    volumes:
-      - ${APPDATA}/Microsoft/UserSecrets/aspnetcore-https:/https:ro
-      - aspnet_data_protection:/root/.aspnet/DataProtection-Keys
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        tag: "{{.Name}}"
-        labels: "production_status,otel=false"
-        env: "os,customer"
-        mode: "non-blocking"
-        max-buffer-size: "25m"
-    networks:
-      - default
-
-  web:
-    build:
-      context: .
-      dockerfile: Ppg.SmartTranscriber.Web/Dockerfile
-      target: development
-    container_name: transcription_web
-    ports:
-      - "3000:80"
-      - "5000:5000"
-    depends_on:
-      api:
-        condition: service_started
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: "http://+:80"
-      ASPNETCORE_HTTP_PORTS: "80"
-      ASPNETCORE_HTTPS_PORTS: ""
-      DOTNET_WATCH_RESTART_ON_RUDE_EDIT: "true"
-      OTEL_LOG_LEVEL: "error"
-      OTEL_SDK_DISABLED: "true"
-      OTEL_TRACES_SAMPLER: "always_off"
-      OTEL_METRICS_EXPORTER: "none"
-      OTEL_LOGS_EXPORTER: "none"
-      OTEL_EXPORTER_OTLP_ENDPOINT: ""
-      ASPNETCORE_DATA_PROTECTION_KEY_PATH: "/root/.aspnet/DataProtection-Keys"
-      ASPNETCORE_DATA_PROTECTION_KEY_LIFETIME: "90"
-    volumes:
-      - ./Ppg.SmartTranscriber.Web:/src/Ppg.SmartTranscriber.Web
-      - aspnet_data_protection:/root/.aspnet/DataProtection-Keys:rw
-    user: "root"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        tag: "{{.Name}}"
-        labels: "production_status,otel=false"
-        env: "os,customer"
-        mode: "non-blocking"
-        max-buffer-size: "25m"
-    networks:
-      - default
+      - smarttranscriber
 
 networks:
-  default:
-    name: transcription_network
+  smarttranscriber:
+    name: smarttranscriber_network
 
 volumes:
-  pgdata:
-  minio_data:
-  aspnet_data_protection:
+  s3_data:
+  hf_cache:
