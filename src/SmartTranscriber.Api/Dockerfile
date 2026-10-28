@@ -15,5 +15,5 @@ RUN dotnet publish "SmartTranscriber.Api.csproj" -c Release -o /app/publish /p:U
 
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "SmartTranscriber.Api.dll"]
