@@ -1,0 +1,67 @@
+@page "/jobs/{Id:guid}"
+@rendermode InteractiveServer
+@inject ITranscriptService Transcripts
+
+<PageTitle>Transcript — SmartTranscriber</PageTitle>
+
+<h2>Transcript</h2>
+
+<p>
+    <a href="/api/v1/jobs/@Id/transcript" download>Download .txt</a>
+</p>
+
+@if (_segments is null)
+{
+    <p>Loading…</p>
+}
+else if (_segments.Count == 0)
+{
+    <p>No segments found.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Start</th>
+                <th>End</th>
+                <th>Speaker</th>
+                <th>Text</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in _segments)
+            {
+                <tr>
+                    <td>@Fmt(s.StartTime)</td>
+                    <td>@Fmt(s.EndTime)</td>
+                    <td>
+                        <input class="form-control form-control-sm"
+                               value="@s.Speaker"
+                               @onchange="e => SaveSpeakerAsync(s, e.Value?.ToString())" />
+                    </td>
+                    <td>@s.Text</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private IReadOnlyList<SegmentDto>? _segments;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _segments = await Transcripts.GetSegmentsAsync(Id);
+    }
+
+    private async Task SaveSpeakerAsync(SegmentDto segment, string? speaker)
+    {
+        await Transcripts.UpdateSpeakerAsync(segment.Id, speaker);
+    }
+
+    private static string Fmt(double seconds)
+        => TimeSpan.FromSeconds(seconds).ToString(@"hh\:mm\:ss");
+}

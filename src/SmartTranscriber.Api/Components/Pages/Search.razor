@@ -1,0 +1,64 @@
+@page "/search"
+@rendermode InteractiveServer
+@inject ITranscriptService Transcripts
+
+<PageTitle>Search — SmartTranscriber</PageTitle>
+
+<h2>Search transcripts</h2>
+
+<div class="input-group mb-3" style="max-width: 600px;">
+    <input class="form-control" placeholder="Search…" @bind="_query" @bind:event="oninput"
+           @onkeydown="OnKeyDown" />
+    <button class="btn btn-primary" @onclick="SearchAsync">Search</button>
+</div>
+
+@if (_hits is not null)
+{
+    if (_hits.Count == 0)
+    {
+        <p>No matches.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th>Time</th>
+                    <th>Speaker</th>
+                    <th>Snippet</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var h in _hits)
+                {
+                    <tr>
+                        <td><a href="/jobs/@h.JobId">@h.OriginalFileName</a></td>
+                        <td>@TimeSpan.FromSeconds(h.StartTime).ToString(@"hh\:mm\:ss")</td>
+                        <td>@h.Speaker</td>
+                        <td>@((MarkupString)h.Snippet)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private string _query = "";
+    private IReadOnlyList<SearchHitDto>? _hits;
+
+    private async Task SearchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_query)) return;
+        _hits = await Transcripts.SearchAsync(_query, 50);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchAsync();
+        }
+    }
+}

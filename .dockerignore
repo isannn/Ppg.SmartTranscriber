@@ -27,4 +27,10 @@ README.md
 !.git/HEAD
 !.git/config
 !.git/packed-refs
-!.git/refs/heads/**
+!.git/refs/heads/****/specs
+**/docs
+**/tests
+tools/stt_svc/.venv
+tools/stt_svc/__pycache__
+tools/stt_svc/models
+smarttranscriber.json
