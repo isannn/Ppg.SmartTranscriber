@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 
 using SmartTranscriber.Core.Domain;
+using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
 
 namespace SmartTranscriber.Api.Controllers;
@@ -56,7 +57,7 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     }
 
     /// <summary>
-    /// Rendered transcript. format=txt (default, plain text) or json.
+    /// Rendered transcript. format=txt (default), json, srt or vtt.
     /// </summary>
     [HttpGet("{id:guid}/transcript")]
     public async Task<IActionResult> GetTranscript(Guid id, [FromQuery] string format = "txt", CancellationToken ct = default)
@@ -67,11 +68,26 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
             return Ok(segments);
         }
 
-        var text = await transcripts.RenderTranscriptAsync(id, ct);
+        var fmt = format.ToLowerInvariant() switch
+        {
+            "srt" => TranscriptFormat.Srt,
+            "vtt" => TranscriptFormat.Vtt,
+            _ => TranscriptFormat.Txt
+        };
+
+        var text = await transcripts.RenderTranscriptAsync(id, fmt, ct);
         if (text is null)
         {
             return NotFound();
         }
-        return Content(text, "text/plain");
+
+        var job = await jobs.GetJobAsync(id, ct);
+        var baseName = Path.GetFileNameWithoutExtension(job?.OriginalFileName ?? "transcript");
+        return fmt switch
+        {
+            TranscriptFormat.Srt => File(System.Text.Encoding.UTF8.GetBytes(text), "application/x-subrip", $"{baseName}.srt"),
+            TranscriptFormat.Vtt => File(System.Text.Encoding.UTF8.GetBytes(text), "text/vtt", $"{baseName}.vtt"),
+            _ => Content(text, "text/plain")
+        };
     }
 }

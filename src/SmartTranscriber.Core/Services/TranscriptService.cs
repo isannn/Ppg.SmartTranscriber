@@ -25,6 +25,14 @@ public sealed class TranscriptService(
         return renderer.RenderText(job, segs);
     }
 
+    public async Task<string?> RenderTranscriptAsync(Guid jobId, Ports.TranscriptFormat format, CancellationToken ct = default)
+    {
+        var job = await jobs.GetByIdAsync(jobId, ct);
+        if (job is null) return null;
+        var segs = await segments.GetByJobAsync(jobId, ct);
+        return renderer.Render(job, segs, format);
+    }
+
     public Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, int limit, CancellationToken ct = default)
         => segments.SearchAsync(query, limit, ct);
 }
