@@ -42,6 +42,20 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     }
 
     /// <summary>
+    /// Streams the source media object (HTTP Range enabled for seeking).
+    /// </summary>
+    [HttpGet("{id:guid}/media")]
+    public async Task<IActionResult> GetMedia(Guid id, CancellationToken ct)
+    {
+        var media = await jobs.DownloadMediaAsync(id, ct);
+        if (media is null)
+        {
+            return NotFound();
+        }
+        return File(media.Value.Stream, MediaTypes.For(media.Value.ObjectName), enableRangeProcessing: true);
+    }
+
+    /// <summary>
     /// Rendered transcript. format=txt (default, plain text) or json.
     /// </summary>
     [HttpGet("{id:guid}/transcript")]

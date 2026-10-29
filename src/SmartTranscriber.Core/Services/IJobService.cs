@@ -9,4 +9,5 @@ public interface IJobService
     Task<JobDto?> GetJobAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<JobDto>> ListJobsAsync(JobStatus? status, int limit, int offset, CancellationToken ct = default);
     Task<bool> DeleteJobAsync(Guid id, bool deleteFile, CancellationToken ct = default);
+    Task<(Stream Stream, string ObjectName)?> DownloadMediaAsync(Guid id, CancellationToken ct = default);
 }

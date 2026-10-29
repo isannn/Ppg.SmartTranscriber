@@ -61,6 +61,17 @@ public sealed class JobService(
         return true;
     }
 
+    public async Task<(Stream Stream, string ObjectName)?> DownloadMediaAsync(Guid id, CancellationToken ct = default)
+    {
+        var job = await jobs.GetByIdAsync(id, ct);
+        if (job is null)
+        {
+            return null;
+        }
+        var stream = await storage.DownloadAsync(job.ObjectName, ct);
+        return (stream, job.ObjectName);
+    }
+
     internal static JobDto Map(TranscriptionJob j) => new(
         j.Id, j.ObjectName, j.OriginalFileName, j.Status.ToString(),
         j.CreatedAt, j.CompletedAt, j.ErrorMessage, j.Model, j.Language,

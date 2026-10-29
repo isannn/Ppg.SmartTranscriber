@@ -1,14 +1,28 @@
 @page "/jobs/{Id:guid}"
 @rendermode InteractiveServer
 @inject ITranscriptService Transcripts
+@inject IJobService Jobs
+@inject IJSRuntime JS
 
 <PageTitle>Transcript — SmartTranscriber</PageTitle>
 
 <h2>Transcript</h2>
 
-<p>
-    <a href="/api/v1/jobs/@Id/transcript" download>Download .txt</a>
-</p>
+@if (_job is not null)
+{
+    <p>
+        <strong>@_job.OriginalFileName</strong> — @_job.Status |
+        <a href="/api/v1/jobs/@Id/transcript" download>Download .txt</a>
+    </p>
+    @if (MediaTypes.IsVideo(_job.OriginalFileName))
+    {
+        <video @ref="_player" controls src="/api/v1/jobs/@Id/media" style="width:100%; max-height:360px;" class="mb-3"></video>
+    }
+    else
+    {
+        <audio @ref="_player" controls src="/api/v1/jobs/@Id/media" style="width:100%;" class="mb-3"></audio>
+    }
+}
 
 @if (_segments is null)
 {
@@ -20,7 +34,7 @@ else if (_segments.Count == 0)
 }
 else
 {
-    <table class="table">
+    <table class="table table-hover">
         <thead>
             <tr>
                 <th>Start</th>
@@ -32,12 +46,14 @@ else
         <tbody>
             @foreach (var s in _segments)
             {
-                <tr>
+                <tr data-start="@s.StartTime" data-end="@s.EndTime" style="cursor:pointer"
+                    @onclick="() => SeekAsync(s.StartTime)">
                     <td>@Fmt(s.StartTime)</td>
                     <td>@Fmt(s.EndTime)</td>
                     <td>
                         <input class="form-control form-control-sm"
                                value="@s.Speaker"
+                               @onclick:stopPropagation="true"
                                @onchange="e => SaveSpeakerAsync(s, e.Value?.ToString())" />
                     </td>
                     <td>@s.Text</td>
@@ -51,10 +67,30 @@ else
     [Parameter] public Guid Id { get; set; }
 
     private IReadOnlyList<SegmentDto>? _segments;
+    private JobDto? _job;
+    private ElementReference _player;
+    private bool _bound;
 
     protected override async Task OnInitializedAsync()
     {
+        _job = await Jobs.GetJobAsync(Id);
         _segments = await Transcripts.GetSegmentsAsync(Id);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_bound && _job is not null && _segments is not null)
+        {
+            _bound = true;
+            try { await JS.InvokeVoidAsync("stMedia.bind", _player); }
+            catch (JSException) { /* player not rendered yet */ }
+        }
+    }
+
+    private async Task SeekAsync(double seconds)
+    {
+        try { await JS.InvokeVoidAsync("stMedia.seek", _player, seconds); }
+        catch (JSException) { /* no player */ }
     }
 
     private async Task SaveSpeakerAsync(SegmentDto segment, string? speaker)
