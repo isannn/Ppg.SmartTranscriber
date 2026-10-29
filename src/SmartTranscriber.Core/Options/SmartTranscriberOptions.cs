@@ -44,9 +44,14 @@ public sealed class SttOptions
 
 public sealed class LlmOptions
 {
-    public string BaseUrl { get; set; } = "http://127.0.0.1:11435/v1";
-    public string Model { get; set; } = "gpt-oss-20b";
-    public int TimeoutSeconds { get; set; } = 300;
+    /// <summary>Primary: tools/llm_bridge (devin acp) loopback URL.</summary>
+    public string BridgeUrl { get; set; } = "http://127.0.0.1:8464";
+
+    /// <summary>Fallback: OpenAI-compatible endpoint (OpenRouter free models).</summary>
+    public string BaseUrl { get; set; } = "https://openrouter.ai/api/v1";
+    public string Model { get; set; } = "deepseek/deepseek-chat-v3-0324:free";
+    public string ApiKey { get; set; } = "";
+    public int TimeoutSeconds { get; set; } = 600;
     public int MaxTranscriptChars { get; set; } = 120000;
 }
 

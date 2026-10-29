@@ -22,3 +22,13 @@ Generate a summary of the transcript via a local OpenAI-compatible LLM
 
 1. POST summary on the test job returns text and persists (GET returns it)
 2. UI button works; CLI `api summarize` prints it
+
+## Amendment (2026-10-29, user): LLM provider chain
+
+- Primary: `tools/llm_bridge` (loopback :8464) — `devin.exe acp`
+  (swe-2-max) via ACP JSON-RPC, vendored client from InterviewGrocker,
+  inbound tool requests denied, subprocess per request.
+- Fallback: OpenRouter free models via `OpenAiSummarizer`
+  (`Llm:BaseUrl`/`Model`/`ApiKey` — env `OPENROUTER_API_KEY`).
+- `SummarizerChain`: bridge → openrouter (same strategy as TranscriberChain).
+- C#: `AcpSummarizer` + `SummarizerChain` replace direct ISummarizer binding.

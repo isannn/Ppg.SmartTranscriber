@@ -36,7 +36,15 @@ public sealed class OpenAiSummarizer(HttpClient http, IOptions<SmartTranscriberO
         };
 
         var url = $"{Llm.BaseUrl.TrimEnd('/')}/chat/completions";
-        using var response = await http.PostAsJsonAsync(url, request, ct);
+        using var message = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = JsonContent.Create(request)
+        };
+        if (!string.IsNullOrWhiteSpace(Llm.ApiKey))
+        {
+            message.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Llm.ApiKey);
+        }
+        using var response = await http.SendAsync(message, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
         {

@@ -7,7 +7,7 @@ public sealed class TranscriptService(
     IJobRepository jobs,
     ISegmentRepository segments,
     ITranscriptRenderer renderer,
-    ISummarizer summarizer) : ITranscriptService
+    SummarizerChain summarizer) : ITranscriptService
 {
     public async Task<IReadOnlyList<SegmentDto>> GetSegmentsAsync(Guid jobId, CancellationToken ct = default)
     {
