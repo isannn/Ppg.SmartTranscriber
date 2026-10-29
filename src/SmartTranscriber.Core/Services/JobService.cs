@@ -75,5 +75,5 @@ public sealed class JobService(
     internal static JobDto Map(TranscriptionJob j) => new(
         j.Id, j.ObjectName, j.OriginalFileName, j.Status.ToString(),
         j.CreatedAt, j.CompletedAt, j.ErrorMessage, j.Model, j.Language,
-        j.DurationSeconds, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count);
+        j.DurationSeconds, j.Summary, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count);
 }

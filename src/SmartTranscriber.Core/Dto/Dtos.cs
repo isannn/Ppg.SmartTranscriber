@@ -13,6 +13,7 @@ public sealed record JobDto(
     string? Model,
     string? Language,
     double? DurationSeconds,
+    string? Summary,
     int SegmentCount);
 
 public sealed record SegmentDto(

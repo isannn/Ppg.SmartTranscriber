@@ -14,6 +14,7 @@ public sealed class SmartTranscriberOptions
     public MinioOptions Minio { get; set; } = new();
     public SttOptions Stt { get; set; } = new();
     public WorkerOptions Worker { get; set; } = new();
+    public LlmOptions Llm { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -39,6 +40,14 @@ public sealed class SttOptions
     public string DefaultLanguage { get; set; } = "ru";
     public bool Diarize { get; set; } = true;
     public int TimeoutSeconds { get; set; } = 3600;
+}
+
+public sealed class LlmOptions
+{
+    public string BaseUrl { get; set; } = "http://127.0.0.1:11435/v1";
+    public string Model { get; set; } = "gpt-oss-20b";
+    public int TimeoutSeconds { get; set; } = 300;
+    public int MaxTranscriptChars { get; set; } = 120000;
 }
 
 public sealed class WorkerOptions
