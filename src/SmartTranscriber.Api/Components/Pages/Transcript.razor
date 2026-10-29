@@ -12,7 +12,10 @@
 {
     <p>
         <strong>@_job.OriginalFileName</strong> — @_job.Status |
-        <a href="/api/v1/jobs/@Id/transcript" download>Download .txt</a>
+        <a href="/api/v1/jobs/@Id/transcript" download>.txt</a> ·
+        <a href="/api/v1/jobs/@Id/transcript?format=srt">.srt</a> ·
+        <a href="/api/v1/jobs/@Id/transcript?format=vtt">.vtt</a> ·
+        <a href="/api/v1/jobs/@Id/transcript?format=json">.json</a>
     </p>
     @if (MediaTypes.IsVideo(_job.OriginalFileName))
     {
