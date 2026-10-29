@@ -12,7 +12,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
     private const string JobColumns =
         "id, object_name AS ObjectName, original_file_name AS OriginalFileName, status, " +
         "created_at AS CreatedAt, completed_at AS CompletedAt, error_message AS ErrorMessage, " +
-        "model, language, duration_seconds AS DurationSeconds";
+        "model, language, duration_seconds AS DurationSeconds, summary AS Summary";
 
     public async Task<TranscriptionJob?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
@@ -60,8 +60,8 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await conn.ExecuteAsync(
             "INSERT INTO transcription_jobs " +
-            "(id, object_name, original_file_name, status, created_at, completed_at, error_message, model, language, duration_seconds) " +
-            "VALUES (@Id, @ObjectName, @OriginalFileName, @Status, @CreatedAt, @CompletedAt, @ErrorMessage, @Model, @Language, @DurationSeconds)",
+            "(id, object_name, original_file_name, status, created_at, completed_at, error_message, model, language, duration_seconds, summary) " +
+            "VALUES (@Id, @ObjectName, @OriginalFileName, @Status, @CreatedAt, @CompletedAt, @ErrorMessage, @Model, @Language, @DurationSeconds, @Summary)",
             new
             {
                 job.Id,
@@ -73,7 +73,8 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 job.ErrorMessage,
                 job.Model,
                 job.Language,
-                job.DurationSeconds
+                job.DurationSeconds,
+                job.Summary
             });
     }
 
@@ -83,7 +84,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         await conn.ExecuteAsync(
             "UPDATE transcription_jobs SET status = @Status, completed_at = @CompletedAt, " +
             "error_message = @ErrorMessage, model = @Model, language = @Language, " +
-            "duration_seconds = @DurationSeconds WHERE id = @Id",
+            "duration_seconds = @DurationSeconds, summary = @Summary WHERE id = @Id",
             new
             {
                 job.Id,
@@ -92,7 +93,8 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 job.ErrorMessage,
                 job.Model,
                 job.Language,
-                job.DurationSeconds
+                job.DurationSeconds,
+                job.Summary
             });
     }
 
@@ -114,6 +116,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         public string? Model { get; set; }
         public string? Language { get; set; }
         public double? DurationSeconds { get; set; }
+        public string? Summary { get; set; }
         public int SegmentCount { get; set; }
 
         public TranscriptionJob ToJob()
@@ -130,6 +133,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 Model = Model,
                 Language = Language,
                 DurationSeconds = DurationSeconds,
+                Summary = Summary,
                 SegmentCount = SegmentCount
             };
         }

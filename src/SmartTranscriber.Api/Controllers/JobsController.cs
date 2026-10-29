@@ -43,6 +43,27 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     }
 
     /// <summary>
+    /// LLM summary. GET returns cached (404 if none), POST regenerates+stores.
+    /// </summary>
+    [HttpGet("{id:guid}/summary")]
+    public async Task<IActionResult> GetSummary(Guid id, CancellationToken ct)
+    {
+        var result = await transcripts.GetOrCreateSummaryAsync(id, regenerate: false, ct);
+        return result is null
+            ? NotFound()
+            : Ok(new { summary = result.Value.Summary, cached = result.Value.Cached });
+    }
+
+    [HttpPost("{id:guid}/summary")]
+    public async Task<IActionResult> CreateSummary(Guid id, CancellationToken ct)
+    {
+        var result = await transcripts.GetOrCreateSummaryAsync(id, regenerate: true, ct);
+        return result is null
+            ? NotFound()
+            : Ok(new { summary = result.Value.Summary, cached = false });
+    }
+
+    /// <summary>
     /// Streams the source media object (HTTP Range enabled for seeking).
     /// </summary>
     [HttpGet("{id:guid}/media")]

@@ -95,6 +95,19 @@ public static class DependencyInjection
 
         services.AddSingleton<ITranscriber, SidecarTranscriber>();
         services.AddSingleton<ITranscriber, WhisperCppTranscriber>();
+        services.AddHttpClient<AcpSummarizer>((sp, client) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<SmartTranscriberOptions>>().Value;
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(30, opts.Llm.TimeoutSeconds));
+        });
+        services.AddHttpClient<OpenAiSummarizer>((sp, client) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<SmartTranscriberOptions>>().Value;
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(30, opts.Llm.TimeoutSeconds));
+        });
+        services.AddTransient<ISummarizer>(sp => sp.GetRequiredService<AcpSummarizer>());
+        services.AddTransient<ISummarizer>(sp => sp.GetRequiredService<OpenAiSummarizer>());
+        services.AddSingleton<SummarizerChain>();
         services.AddSingleton<TranscriberChain>();
         return services;
     }

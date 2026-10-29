@@ -14,6 +14,7 @@ public sealed class SmartTranscriberOptions
     public MinioOptions Minio { get; set; } = new();
     public SttOptions Stt { get; set; } = new();
     public WorkerOptions Worker { get; set; } = new();
+    public LlmOptions Llm { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -39,6 +40,19 @@ public sealed class SttOptions
     public string DefaultLanguage { get; set; } = "ru";
     public bool Diarize { get; set; } = true;
     public int TimeoutSeconds { get; set; } = 3600;
+}
+
+public sealed class LlmOptions
+{
+    /// <summary>Primary: tools/llm_bridge (devin acp) loopback URL.</summary>
+    public string BridgeUrl { get; set; } = "http://127.0.0.1:8464";
+
+    /// <summary>Fallback: OpenAI-compatible endpoint (OpenRouter free models).</summary>
+    public string BaseUrl { get; set; } = "https://openrouter.ai/api/v1";
+    public string Model { get; set; } = "deepseek/deepseek-chat-v3-0324:free";
+    public string ApiKey { get; set; } = "";
+    public int TimeoutSeconds { get; set; } = 600;
+    public int MaxTranscriptChars { get; set; } = 120000;
 }
 
 public sealed class WorkerOptions
