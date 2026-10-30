@@ -63,6 +63,7 @@ public static class Program
               smarttranscriber api search <query> [--limit N]
               smarttranscriber api summarize <id>
               smarttranscriber api url <media-url>
+              smarttranscriber api rename <id> <from> <to>
                   Talk to the API service (default http://127.0.0.1:8460).
               smarttranscriber db migrate
                   Apply pending DbUp migrations.
@@ -165,6 +166,7 @@ file static class ApiCommand
             "search" => await SearchAsync(http, args[1..]),
             "summarize" => await SummarizeAsync(http, args[1..]),
             "url" => await UrlAsync(http, args[1..]),
+            "rename" => await RenameAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
     }
@@ -247,6 +249,20 @@ file static class ApiCommand
             return 2;
         }
         var response = await http.PostAsJsonAsync("api/v1/jobs/from-url", new { url });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> RenameAsync(HttpClient http, string[] args)
+    {
+        var positional = args.Where(a => !a.StartsWith('-')).ToList();
+        if (positional.Count < 3)
+        {
+            Console.Error.WriteLine("usage: api rename <id> <from> <to>");
+            return 2;
+        }
+        var response = await http.PostAsJsonAsync($"api/v1/jobs/{positional[0]}/speakers/rename",
+            new { from = positional[1], to = positional[2] });
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }

@@ -15,6 +15,15 @@ public sealed class TranscriptService(
         return list.Select(s => new SegmentDto(s.Id, s.StartTime, s.EndTime, s.Speaker, s.Text)).ToList();
     }
 
+    public async Task<int?> RenameSpeakerAsync(Guid jobId, string from, string to, CancellationToken ct = default)
+    {
+        if (await jobs.GetByIdAsync(jobId, ct) is null)
+        {
+            return null;
+        }
+        return await segments.RenameSpeakerAsync(jobId, from, to, ct);
+    }
+
     public Task<bool> UpdateSpeakerAsync(long segmentId, string? speaker, CancellationToken ct = default)
         => segments.UpdateSpeakerAsync(segmentId, speaker, ct);
 
