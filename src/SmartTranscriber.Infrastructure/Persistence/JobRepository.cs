@@ -12,7 +12,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
     private const string JobColumns =
         "id, object_name AS ObjectName, original_file_name AS OriginalFileName, status, " +
         "created_at AS CreatedAt, completed_at AS CompletedAt, error_message AS ErrorMessage, " +
-        "model, language, duration_seconds AS DurationSeconds, summary AS Summary";
+        "model, language, duration_seconds AS DurationSeconds, summary AS Summary, progress AS Progress";
 
     public async Task<TranscriptionJob?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
@@ -84,7 +84,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         await conn.ExecuteAsync(
             "UPDATE transcription_jobs SET status = @Status, completed_at = @CompletedAt, " +
             "error_message = @ErrorMessage, model = @Model, language = @Language, " +
-            "duration_seconds = @DurationSeconds, summary = @Summary, " +
+            "duration_seconds = @DurationSeconds, summary = @Summary, progress = @Progress, " +
             "object_name = @ObjectName, original_file_name = @OriginalFileName WHERE id = @Id",
             new
             {
@@ -96,6 +96,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 job.Language,
                 job.DurationSeconds,
                 job.Summary,
+                job.Progress,
                 job.ObjectName,
                 job.OriginalFileName
             });
@@ -120,6 +121,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         public string? Language { get; set; }
         public double? DurationSeconds { get; set; }
         public string? Summary { get; set; }
+        public int Progress { get; set; }
         public int SegmentCount { get; set; }
 
         public TranscriptionJob ToJob()
@@ -137,6 +139,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 Language = Language,
                 DurationSeconds = DurationSeconds,
                 Summary = Summary,
+                Progress = Progress,
                 SegmentCount = SegmentCount
             };
         }

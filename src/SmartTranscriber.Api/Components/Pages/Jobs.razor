@@ -34,7 +34,16 @@ else
             {
                 <tr>
                     <td>@job.OriginalFileName</td>
-                    <td>@job.Status</td>
+                    <td>
+                        @job.Status
+                        @if (job.Status is not (nameof(JobStatus.Done) or nameof(JobStatus.Failed)))
+                        {
+                            <div class="progress" style="height:6px; min-width:90px">
+                                <div class="progress-bar" role="progressbar" style="width:@job.Progress%"></div>
+                            </div>
+                            <small>@job.Progress%</small>
+                        }
+                    </td>
                     <td>@job.CreatedAt.ToString("g")</td>
                     <td>@job.Model</td>
                     <td>
