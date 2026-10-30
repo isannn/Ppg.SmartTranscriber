@@ -71,6 +71,7 @@ public sealed class JobService(
             ObjectName = $"url/{Guid.NewGuid():N}",
             OriginalFileName = url,
             Status = JobStatus.Downloading,
+            Progress = 2,
             CreatedAt = DateTime.UtcNow
         };
         await jobs.AddAsync(job, ct);
@@ -113,6 +114,7 @@ public sealed class JobService(
                 job.ObjectName = objectName;
                 job.OriginalFileName = Path.GetFileName(file);
                 job.Status = JobStatus.Pending;
+                job.Progress = 5;
                 await repo.UpdateAsync(job);
                 await jobQueue.EnqueueAsync(jobId);
             }
@@ -163,5 +165,5 @@ public sealed class JobService(
     internal static JobDto Map(TranscriptionJob j) => new(
         j.Id, j.ObjectName, j.OriginalFileName, j.Status.ToString(),
         j.CreatedAt, j.CompletedAt, j.ErrorMessage, j.Model, j.Language,
-        j.DurationSeconds, j.Summary, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count);
+        j.DurationSeconds, j.Summary, j.Progress, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count);
 }

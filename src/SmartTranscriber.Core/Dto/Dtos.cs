@@ -14,6 +14,7 @@ public sealed record JobDto(
     string? Language,
     double? DurationSeconds,
     string? Summary,
+    int Progress,
     int SegmentCount);
 
 public sealed record SegmentDto(
