@@ -62,6 +62,7 @@ public static class Program
               smarttranscriber api transcript <id> [-o file.txt] [--format txt|json]
               smarttranscriber api search <query> [--limit N]
               smarttranscriber api summarize <id>
+              smarttranscriber api url <media-url>
                   Talk to the API service (default http://127.0.0.1:8460).
               smarttranscriber db migrate
                   Apply pending DbUp migrations.
@@ -163,6 +164,7 @@ file static class ApiCommand
             "transcript" => await TranscriptAsync(http, args[1..]),
             "search" => await SearchAsync(http, args[1..]),
             "summarize" => await SummarizeAsync(http, args[1..]),
+            "url" => await UrlAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
     }
@@ -234,6 +236,19 @@ file static class ApiCommand
             Console.WriteLine(text);
         }
         return 0;
+    }
+
+    private static async Task<int> UrlAsync(HttpClient http, string[] args)
+    {
+        var url = args.FirstOrDefault(a => !a.StartsWith('-'));
+        if (url is null)
+        {
+            Console.Error.WriteLine("usage: api url <media-url>");
+            return 2;
+        }
+        var response = await http.PostAsJsonAsync("api/v1/jobs/from-url", new { url });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
     }
 
     private static async Task<int> SummarizeAsync(HttpClient http, string[] args)

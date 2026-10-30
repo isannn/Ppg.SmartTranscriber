@@ -15,6 +15,7 @@ public sealed class SmartTranscriberOptions
     public SttOptions Stt { get; set; } = new();
     public WorkerOptions Worker { get; set; } = new();
     public LlmOptions Llm { get; set; } = new();
+    public YtDlpOptions YtDlp { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -53,6 +54,15 @@ public sealed class LlmOptions
     public string ApiKey { get; set; } = "";
     public int TimeoutSeconds { get; set; } = 600;
     public int MaxTranscriptChars { get; set; } = 120000;
+}
+
+public sealed class YtDlpOptions
+{
+    public string Command { get; set; } = "py";
+    public string Args { get; set; } = "-3.11 -m yt_dlp";
+    /// <summary>SOCKS proxy; falls back to the TG_PROXY env var when empty.</summary>
+    public string Proxy { get; set; } = "";
+    public int TimeoutSeconds { get; set; } = 600;
 }
 
 public sealed class WorkerOptions

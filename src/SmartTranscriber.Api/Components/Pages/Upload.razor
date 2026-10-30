@@ -11,6 +11,13 @@
 
 <button class="btn btn-primary mt-2" @onclick="UploadAsync" disabled="@(!CanUpload)">Upload</button>
 
+<hr class="my-4" />
+<h4>Or ingest from URL (YouTube &c.)</h4>
+<div class="input-group" style="max-width:640px">
+    <input class="form-control" placeholder="https://youtube.com/watch?v=…" @bind="_url" />
+    <button class="btn btn-outline-primary" @onclick="UrlAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_url))">Fetch &amp; transcribe</button>
+</div>
+
 @if (_error is not null)
 {
     <div class="alert alert-danger mt-3">@_error</div>
@@ -27,6 +34,7 @@
     private JobDto? _uploaded;
     private string? _error;
     private bool _busy;
+    private string _url = "";
 
     private bool CanUpload => _file is not null && !_busy;
 
@@ -46,6 +54,25 @@
         {
             await using var stream = _file.OpenReadStream(4L * 1024 * 1024 * 1024);
             _uploaded = await Jobs.CreateJobAsync(_file.Name, stream, _file.ContentType);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task UrlAsync()
+    {
+        _busy = true;
+        _error = null;
+        _uploaded = null;
+        try
+        {
+            _uploaded = await Jobs.CreateUrlJobAsync(_url.Trim());
         }
         catch (Exception ex)
         {
