@@ -40,6 +40,14 @@ public sealed class SegmentRepository(NpgsqlDataSource dataSource) : ISegmentRep
         return affected > 0;
     }
 
+    public async Task<int> RenameSpeakerAsync(Guid jobId, string from, string to, CancellationToken ct = default)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        return await conn.ExecuteAsync(
+            "UPDATE transcript_segments SET speaker = @to WHERE job_id = @jobId AND speaker = @from",
+            new { jobId, from, to });
+    }
+
     public async Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, int limit, CancellationToken ct = default)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);

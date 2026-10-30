@@ -81,6 +81,22 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     }
 
     /// <summary>
+    /// Bulk speaker rename across all segments of the job.
+    /// </summary>
+    [HttpPost("{id:guid}/speakers/rename")]
+    public async Task<IActionResult> RenameSpeaker(Guid id, [FromBody] RenameRequest request, CancellationToken ct)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.From) || string.IsNullOrWhiteSpace(request.To))
+        {
+            return BadRequest(new { error = "from and to required" });
+        }
+        var updated = await transcripts.RenameSpeakerAsync(id, request.From, request.To, ct);
+        return updated is null ? NotFound() : Ok(new { updated });
+    }
+
+    public sealed record RenameRequest(string From, string To);
+
+    /// <summary>
     /// Streams the source media object (HTTP Range enabled for seeking).
     /// </summary>
     [HttpGet("{id:guid}/media")]
