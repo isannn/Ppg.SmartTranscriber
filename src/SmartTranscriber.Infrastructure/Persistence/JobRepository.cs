@@ -84,7 +84,8 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         await conn.ExecuteAsync(
             "UPDATE transcription_jobs SET status = @Status, completed_at = @CompletedAt, " +
             "error_message = @ErrorMessage, model = @Model, language = @Language, " +
-            "duration_seconds = @DurationSeconds, summary = @Summary WHERE id = @Id",
+            "duration_seconds = @DurationSeconds, summary = @Summary, " +
+            "object_name = @ObjectName, original_file_name = @OriginalFileName WHERE id = @Id",
             new
             {
                 job.Id,
@@ -94,7 +95,9 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 job.Model,
                 job.Language,
                 job.DurationSeconds,
-                job.Summary
+                job.Summary,
+                job.ObjectName,
+                job.OriginalFileName
             });
     }
 
