@@ -19,6 +19,8 @@ public sealed class TranscriptionPipeline(
     TranscriberChain transcribers,
     IWebhookNotifier webhooks,
     ITranscriptRenderer renderer,
+    IKeyFrameExtractor keyframes,
+    IFrameRepository frames,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
 {
@@ -94,6 +96,7 @@ public sealed class TranscriptionPipeline(
             logger.LogInformation("Job {JobId} done via {Transcriber}: {Count} segments",
                 job.Id, transcriber.Name, result.Segments.Count);
             ExportForIg(job, result.Segments);
+            await ExtractFramesAsync(job, localPath, ct);
             await webhooks.NotifyJobFinishedAsync(job, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -114,6 +117,37 @@ public sealed class TranscriptionPipeline(
         finally
         {
             try { File.Delete(localPath); } catch { /* best effort */ }
+        }
+    }
+
+    private static readonly string[] VideoExtensions = [".mp4", ".webm", ".mkv", ".mov", ".avi"];
+
+    /// <summary>Scene-detect key frames for video jobs → S3 + media_frames.</summary>
+    private async Task ExtractFramesAsync(TranscriptionJob job, string localPath, CancellationToken ct)
+    {
+        if (!options.Value.KeyFrames.Enabled
+            || !VideoExtensions.Contains(Path.GetExtension(job.OriginalFileName).ToLowerInvariant()))
+        {
+            return;
+        }
+        try
+        {
+            var dir = Path.Combine(Path.GetTempPath(), $"st_kf_{job.Id:N}");
+            var extracted = await keyframes.ExtractAsync(localPath, dir, ct);
+            var rows = new List<MediaFrame>();
+            foreach (var (no, sec, file) in extracted)
+            {
+                var objectName = $"frames/{job.Id}/{no}.jpg";
+                await using var fs = File.OpenRead(file);
+                await storage.UploadAsync(objectName, fs, "image/jpeg", ct);
+                rows.Add(new MediaFrame { JobId = job.Id, FrameNo = no, TimeSeconds = sec, ObjectName = objectName });
+            }
+            await frames.InsertBatchAsync(rows, ct);
+            logger.LogInformation("Job {JobId}: {Count} key frames extracted", job.Id, rows.Count);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Key frame extraction failed for job {JobId}", job.Id);
         }
     }
 

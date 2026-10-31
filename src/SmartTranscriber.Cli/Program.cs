@@ -65,6 +65,7 @@ public static class Program
               smarttranscriber api url <media-url>
               smarttranscriber api rename <id> <from> <to>
               smarttranscriber api retry <id>
+              smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
               smarttranscriber db migrate
                   Apply pending DbUp migrations.
@@ -174,6 +175,7 @@ file static class ApiCommand
             "url" => await UrlAsync(http, args[1..]),
             "rename" => await RenameAsync(http, args[1..]),
             "retry" => await RetryAsync(http, args[1..]),
+            "frames" => await FramesAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
     }
@@ -363,6 +365,18 @@ file static class ApiCommand
             }
         }
         Console.WriteLine(await http.GetStringAsync(url));
+        return 0;
+    }
+
+    private static async Task<int> FramesAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => !a.StartsWith('-'));
+        if (id is null)
+        {
+            Console.Error.WriteLine("usage: api frames <id>");
+            return 2;
+        }
+        Console.WriteLine(await http.GetStringAsync($"api/v1/jobs/{id}/frames"));
         return 0;
     }
 }

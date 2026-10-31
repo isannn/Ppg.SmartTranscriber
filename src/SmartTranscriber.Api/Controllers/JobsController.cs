@@ -126,6 +126,33 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
         return File(media.Value.Stream, MediaTypes.For(media.Value.ObjectName), enableRangeProcessing: true);
     }
 
+    /// <summary>List extracted key frames for a video job.</summary>
+    [HttpGet("{id:guid}/frames")]
+    public async Task<IActionResult> ListFrames(Guid id, [FromServices] IFrameRepository frames, CancellationToken ct)
+    {
+        var rows = await frames.GetByJobAsync(id, ct);
+        return Ok(rows.Select(f => new
+        {
+            f.FrameNo,
+            f.TimeSeconds,
+            url = $"frames/{f.FrameNo}"
+        }));
+    }
+
+    /// <summary>Stream one key frame (image/jpeg).</summary>
+    [HttpGet("{id:guid}/frames/{no:int}")]
+    public async Task<IActionResult> GetFrame(Guid id, int no,
+        [FromServices] IFrameRepository frames, [FromServices] IStorageService storage, CancellationToken ct)
+    {
+        var frame = await frames.GetAsync(id, no, ct);
+        if (frame is null)
+        {
+            return NotFound();
+        }
+        var stream = await storage.DownloadAsync(frame.ObjectName, ct);
+        return File(stream, "image/jpeg");
+    }
+
     /// <summary>
     /// Rendered transcript. format=txt (default), json, srt or vtt.
     /// </summary>
