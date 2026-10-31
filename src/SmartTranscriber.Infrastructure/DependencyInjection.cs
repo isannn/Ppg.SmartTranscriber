@@ -96,7 +96,6 @@ public static class DependencyInjection
         });
 
         services.AddSingleton<ITranscriber, SidecarTranscriber>();
-        services.AddSingleton<ITranscriber, WhisperCppTranscriber>();
         services.AddHttpClient<AcpSummarizer>((sp, client) =>
         {
             var opts = sp.GetRequiredService<IOptions<SmartTranscriberOptions>>().Value;

@@ -13,8 +13,6 @@
     },
     "Stt": {
       "SidecarUrl": "http://127.0.0.1:8461",
-      "WhisperCppPath": "",
-      "WhisperModelPath": "",
       "DefaultModel": "gigaam-v3-e2e-rnnt",
       "DefaultLanguage": "ru",
       "Diarize": true,
