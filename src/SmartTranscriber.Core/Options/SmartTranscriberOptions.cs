@@ -37,8 +37,6 @@ public sealed class MinioOptions
 public sealed class SttOptions
 {
     public string SidecarUrl { get; set; } = "http://127.0.0.1:8461";
-    public string WhisperCppPath { get; set; } = "";
-    public string WhisperModelPath { get; set; } = "";
     public string DefaultModel { get; set; } = "gigaam-v3-e2e-rnnt";
     public string DefaultLanguage { get; set; } = "ru";
     public bool Diarize { get; set; } = true;

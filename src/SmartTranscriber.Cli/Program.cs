@@ -55,7 +55,7 @@ public static class Program
 
             Usage:
               smarttranscriber transcribe <file> [-o out.txt] [--model M] [--language L] [--no-diarize]
-                  Transcribe a media file standalone (stt sidecar, whisper.cpp fallback).
+                  Transcribe a media file standalone (stt sidecar).
               smarttranscriber api upload <file> [file...] | api upload --dir <path>
               smarttranscriber api jobs [--status Pending|Processing|Done|Failed] [--limit N]
               smarttranscriber api job <id>
