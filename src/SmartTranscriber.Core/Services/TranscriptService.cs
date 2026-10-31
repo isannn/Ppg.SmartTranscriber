@@ -61,6 +61,6 @@ public sealed class TranscriptService(
         return (summary, false);
     }
 
-    public Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, int limit, CancellationToken ct = default)
-        => segments.SearchAsync(query, limit, ct);
+    public Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, int limit, SearchFilters? filters = null, CancellationToken ct = default)
+        => segments.SearchAsync(query, limit, filters, ct);
 }

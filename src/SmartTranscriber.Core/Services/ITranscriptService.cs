@@ -10,5 +10,5 @@ public interface ITranscriptService
     Task<string?> RenderTranscriptAsync(Guid jobId, CancellationToken ct = default);
     Task<string?> RenderTranscriptAsync(Guid jobId, Ports.TranscriptFormat format, CancellationToken ct = default);
     Task<(string Summary, bool Cached)?> GetOrCreateSummaryAsync(Guid jobId, bool regenerate, SmartTranscriber.Core.Dto.SummaryRequest? request = null, CancellationToken ct = default);
-    Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, int limit, CancellationToken ct = default);
+    Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, int limit, SearchFilters? filters = null, CancellationToken ct = default);
 }
