@@ -61,7 +61,7 @@ public static class Program
               smarttranscriber api job <id>
               smarttranscriber api transcript <id> [-o file.txt] [--format txt|json]
               smarttranscriber api search <query> [--limit N]
-              smarttranscriber api summarize <id>
+              smarttranscriber api summarize <id> [--model M] [--prompt P] [--regenerate]
               smarttranscriber api url <media-url>
               smarttranscriber api rename <id> <from> <to>
               smarttranscriber api retry <id>
@@ -328,7 +328,13 @@ file static class ApiCommand
             Console.Error.WriteLine("usage: api summarize <id>");
             return 2;
         }
-        var response = await http.PostAsync($"api/v1/jobs/{id}/summary", null);
+        var body = new
+        {
+            model = TranscribeCommand.OptValue(args, "--model"),
+            prompt = TranscribeCommand.OptValue(args, "--prompt"),
+            regenerate = args.Contains("--regenerate")
+        };
+        var response = await http.PostAsJsonAsync($"api/v1/jobs/{id}/summary", body);
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }

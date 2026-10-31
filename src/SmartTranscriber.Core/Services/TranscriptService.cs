@@ -43,7 +43,7 @@ public sealed class TranscriptService(
         return renderer.Render(job, segs, format);
     }
 
-    public async Task<(string Summary, bool Cached)?> GetOrCreateSummaryAsync(Guid jobId, bool regenerate, CancellationToken ct = default)
+    public async Task<(string Summary, bool Cached)?> GetOrCreateSummaryAsync(Guid jobId, bool regenerate, SmartTranscriber.Core.Dto.SummaryRequest? request = null, CancellationToken ct = default)
     {
         var job = await jobs.GetByIdAsync(jobId, ct);
         if (job is null)
@@ -55,7 +55,7 @@ public sealed class TranscriptService(
             return (job.Summary, true);
         }
         var segs = await segments.GetByJobAsync(jobId, ct);
-        var summary = await summarizer.SummarizeAsync(renderer.RenderText(job, segs), ct);
+        var summary = await summarizer.SummarizeAsync(renderer.RenderText(job, segs), request, ct);
         job.Summary = summary;
         await jobs.UpdateAsync(job, ct);
         return (summary, false);

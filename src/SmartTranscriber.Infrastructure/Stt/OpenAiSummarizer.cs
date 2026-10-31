@@ -17,18 +17,20 @@ public sealed class OpenAiSummarizer(HttpClient http, IOptions<SmartTranscriberO
 
     private LlmOptions Llm => options.Value.Llm;
 
-    public async Task<string> SummarizeAsync(string transcriptText, CancellationToken ct = default)
+    public async Task<string> SummarizeAsync(string transcriptText, SmartTranscriber.Core.Dto.SummaryRequest? request, CancellationToken ct = default)
     {
         var text = transcriptText.Length > Llm.MaxTranscriptChars
             ? transcriptText[..Llm.MaxTranscriptChars]
             : transcriptText;
 
-        var request = new
+        var payload = new
         {
-            model = Llm.Model,
+            model = string.IsNullOrWhiteSpace(request?.Model) ? Llm.Model : request.Model,
             messages = new object[]
             {
-                new { role = "system", content = "You summarize transcripts. Reply in the same language as the transcript. Be concise: 5-10 bullet points, then a one-paragraph TL;DR." },
+                new { role = "system", content = string.IsNullOrWhiteSpace(request?.Prompt)
+                    ? "You summarize transcripts. Reply in the same language as the transcript. Be concise: 5-10 bullet points, then a one-paragraph TL;DR."
+                    : request.Prompt! },
                 new { role = "user", content = $"Summarize this transcript:\n\n{text}" }
             },
             temperature = 0.3,
@@ -38,7 +40,7 @@ public sealed class OpenAiSummarizer(HttpClient http, IOptions<SmartTranscriberO
         var url = $"{Llm.BaseUrl.TrimEnd('/')}/chat/completions";
         using var message = new HttpRequestMessage(HttpMethod.Post, url)
         {
-            Content = JsonContent.Create(request)
+            Content = JsonContent.Create(payload)
         };
         if (!string.IsNullOrWhiteSpace(Llm.ApiKey))
         {

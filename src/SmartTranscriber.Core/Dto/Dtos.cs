@@ -32,6 +32,8 @@ public sealed record TranscriptResult(
     double? DurationSeconds,
     string? Language);
 
+public sealed record SummaryRequest(string? Model = null, string? Prompt = null, bool Regenerate = false);
+
 public sealed record SearchHitDto(
     long SegmentId,
     Guid JobId,
