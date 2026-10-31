@@ -31,17 +31,20 @@ public sealed class AcpSummarizer(HttpClient http, IOptions<SmartTranscriberOpti
         }
     }
 
-    public async Task<string> SummarizeAsync(string transcriptText, CancellationToken ct = default)
+    public async Task<string> SummarizeAsync(string transcriptText, SmartTranscriber.Core.Dto.SummaryRequest? request, CancellationToken ct = default)
     {
         var llm = options.Value.Llm;
         var text = transcriptText.Length > llm.MaxTranscriptChars
             ? transcriptText[..llm.MaxTranscriptChars]
             : transcriptText;
 
-        var prompt =
-            "You summarize transcripts. Reply in the same language as the transcript. " +
-            "Be concise: 5-10 bullet points, then a one-paragraph TL;DR. " +
-            "Output ONLY the summary text.\n\n" + text;
+        // devin acp has no per-call model switch — Model is ignored here
+        var instruction = string.IsNullOrWhiteSpace(request?.Prompt)
+            ? "You summarize transcripts. Reply in the same language as the transcript. " +
+              "Be concise: 5-10 bullet points, then a one-paragraph TL;DR. " +
+              "Output ONLY the summary text."
+            : request!.Prompt!;
+        var prompt = instruction + "\n\n" + text;
 
         var url = $"{llm.BridgeUrl.TrimEnd('/')}/chat";
         using var response = await http.PostAsJsonAsync(url, new { prompt }, ct);

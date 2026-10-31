@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 
 using SmartTranscriber.Core.Domain;
+using SmartTranscriber.Core.Dto;
 using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
 
@@ -65,19 +66,19 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     [HttpGet("{id:guid}/summary")]
     public async Task<IActionResult> GetSummary(Guid id, CancellationToken ct)
     {
-        var result = await transcripts.GetOrCreateSummaryAsync(id, regenerate: false, ct);
+        var result = await transcripts.GetOrCreateSummaryAsync(id, regenerate: false, ct: ct);
         return result is null
             ? NotFound()
             : Ok(new { summary = result.Value.Summary, cached = result.Value.Cached });
     }
 
     [HttpPost("{id:guid}/summary")]
-    public async Task<IActionResult> CreateSummary(Guid id, CancellationToken ct)
+    public async Task<IActionResult> CreateSummary(Guid id, [FromBody] SummaryRequest? request, CancellationToken ct)
     {
-        var result = await transcripts.GetOrCreateSummaryAsync(id, regenerate: true, ct);
+        var result = await transcripts.GetOrCreateSummaryAsync(id, request?.Regenerate ?? false, request, ct);
         return result is null
             ? NotFound()
-            : Ok(new { summary = result.Value.Summary, cached = false });
+            : Ok(new { summary = result.Value.Summary, cached = result.Value.Cached });
     }
 
     /// <summary>
