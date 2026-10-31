@@ -17,6 +17,7 @@ public sealed class TranscriptionPipeline(
     ISegmentRepository segments,
     IStorageService storage,
     TranscriberChain transcribers,
+    IWebhookNotifier webhooks,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
 {
@@ -73,6 +74,7 @@ public sealed class TranscriptionPipeline(
             await jobs.UpdateAsync(job, ct);
             logger.LogInformation("Job {JobId} done via {Transcriber}: {Count} segments",
                 job.Id, transcriber.Name, result.Segments.Count);
+            await webhooks.NotifyJobFinishedAsync(job, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -87,6 +89,7 @@ public sealed class TranscriptionPipeline(
             job.ErrorMessage = ex.Message;
             job.CompletedAt = DateTime.UtcNow;
             await jobs.UpdateAsync(job, CancellationToken.None);
+            await webhooks.NotifyJobFinishedAsync(job, CancellationToken.None);
         }
         finally
         {
