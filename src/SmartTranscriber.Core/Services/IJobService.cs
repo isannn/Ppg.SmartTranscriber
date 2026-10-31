@@ -12,4 +12,6 @@ public interface IJobService
     Task<IReadOnlyList<JobDto>> ListJobsAsync(JobStatus? status, int limit, int offset, CancellationToken ct = default);
     Task<bool> DeleteJobAsync(Guid id, bool deleteFile, CancellationToken ct = default);
     Task<(Stream Stream, string ObjectName)?> DownloadMediaAsync(Guid id, CancellationToken ct = default);
+    /// <summary>Requeues a Failed job. Null = not found, false = not Failed.</summary>
+    Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default);
 }

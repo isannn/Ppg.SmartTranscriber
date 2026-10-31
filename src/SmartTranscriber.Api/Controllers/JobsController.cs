@@ -81,6 +81,21 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     }
 
     /// <summary>
+    /// Requeues a Failed job (media object is reused). 409 for non-Failed.
+    /// </summary>
+    [HttpPost("{id:guid}/retry")]
+    public async Task<IActionResult> Retry(Guid id, CancellationToken ct)
+    {
+        var result = await jobs.RetryJobAsync(id, ct);
+        return result switch
+        {
+            null => NotFound(),
+            false => Conflict(new { error = "job is not in Failed status" }),
+            _ => Accepted(new { id, status = "Pending" })
+        };
+    }
+
+    /// <summary>
     /// Bulk speaker rename across all segments of the job.
     /// </summary>
     [HttpPost("{id:guid}/speakers/rename")]

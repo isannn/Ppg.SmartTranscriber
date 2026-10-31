@@ -156,6 +156,26 @@ public sealed class JobService(
         return (stream, job.ObjectName);
     }
 
+    public async Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default)
+    {
+        var job = await jobs.GetByIdAsync(id, ct);
+        if (job is null)
+        {
+            return null;
+        }
+        if (job.Status != JobStatus.Failed)
+        {
+            return false;
+        }
+        job.Status = JobStatus.Pending;
+        job.Progress = 5;
+        job.ErrorMessage = null;
+        job.CompletedAt = null;
+        await jobs.UpdateAsync(job, ct);
+        await queue.EnqueueAsync(id, ct);
+        return true;
+    }
+
     /// <summary>S3 object keys: brackets/spaces break GetObject on rustfs — keep [A-Za-z0-9._-].</summary>
     private static string SafeName(string name)
     {
