@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 
 using SmartTranscriber.Core.Domain;
+using SmartTranscriber.Core.Dto;
 using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
 
