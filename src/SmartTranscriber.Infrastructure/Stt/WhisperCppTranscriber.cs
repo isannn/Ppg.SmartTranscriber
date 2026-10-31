@@ -34,7 +34,7 @@ public sealed class WhisperCppTranscriber(
         return Task.FromResult(ok);
     }
 
-    public async Task<TranscriptResult> TranscribeAsync(string mediaPath, TranscribeOptions transcribeOptions, CancellationToken ct = default)
+    public async Task<TranscriptResult> TranscribeAsync(string mediaPath, TranscribeOptions transcribeOptions, CancellationToken ct = default, IProgress<double>? progress = null)
     {
         var outputBase = Path.Combine(Path.GetTempPath(), $"st_{Guid.NewGuid():N}");
         var jsonPath = outputBase + ".json";
