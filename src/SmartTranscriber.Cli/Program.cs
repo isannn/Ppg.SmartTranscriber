@@ -348,7 +348,16 @@ file static class ApiCommand
             return 2;
         }
         var limit = TranscribeCommand.OptValue(args, "--limit") ?? "50";
-        Console.WriteLine(await http.GetStringAsync($"api/v1/search?q={Uri.EscapeDataString(query)}&limit={limit}"));
+        var url = $"api/v1/search?q={Uri.EscapeDataString(query)}&limit={limit}";
+        foreach (var flag in new[] { "job", "speaker", "from", "to", "model" })
+        {
+            var v = TranscribeCommand.OptValue(args, $"--{flag}");
+            if (v is not null)
+            {
+                url += $"&{(flag == "job" ? "jobId" : flag)}={Uri.EscapeDataString(v)}";
+            }
+        }
+        Console.WriteLine(await http.GetStringAsync(url));
         return 0;
     }
 }

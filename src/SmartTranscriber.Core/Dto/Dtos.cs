@@ -34,6 +34,13 @@ public sealed record TranscriptResult(
 
 public sealed record SummaryRequest(string? Model = null, string? Prompt = null, bool Regenerate = false);
 
+public sealed record SearchFilters(
+    Guid? JobId = null,
+    string? Speaker = null,
+    DateTime? From = null,
+    DateTime? To = null,
+    string? Model = null);
+
 public sealed record SearchHitDto(
     long SegmentId,
     Guid JobId,
