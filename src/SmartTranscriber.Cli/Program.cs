@@ -56,7 +56,7 @@ public static class Program
             Usage:
               smarttranscriber transcribe <file> [-o out.txt] [--model M] [--language L] [--no-diarize]
                   Transcribe a media file standalone (stt sidecar, whisper.cpp fallback).
-              smarttranscriber api upload <file>
+              smarttranscriber api upload <file> [file...] | api upload --dir <path>
               smarttranscriber api jobs [--status Pending|Processing|Done|Failed] [--limit N]
               smarttranscriber api job <id>
               smarttranscriber api transcript <id> [-o file.txt] [--format txt|json]
@@ -177,21 +177,59 @@ file static class ApiCommand
         return 2;
     }
 
+    private static readonly HashSet<string> MediaExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".wma",
+        ".mp4", ".mkv", ".webm", ".avi", ".mov"
+    };
+
     private static async Task<int> UploadAsync(HttpClient http, string[] args)
     {
-        var file = args.FirstOrDefault(a => !a.StartsWith('-'));
-        if (file is null || !File.Exists(file))
+        var dir = TranscribeCommand.OptValue(args, "--dir");
+        var files = new List<string>();
+        if (dir is not null)
         {
-            Console.Error.WriteLine("usage: api upload <file>");
-            return 2;
+            files.AddRange(Directory.EnumerateFiles(dir)
+                .Where(f => MediaExtensions.Contains(Path.GetExtension(f))));
+            if (files.Count == 0)
+            {
+                Console.Error.WriteLine($"no media files in {dir}");
+                return 2;
+            }
+        }
+        else
+        {
+            files.AddRange(args.Where(a => !a.StartsWith('-')).Where(File.Exists));
+            if (files.Count == 0)
+            {
+                Console.Error.WriteLine("usage: api upload <file> [file...] | api upload --dir <path>");
+                return 2;
+            }
         }
 
-        await using var stream = File.OpenRead(file);
-        using var content = new MultipartFormDataContent();
-        content.Add(new StreamContent(stream), "file", Path.GetFileName(file));
-        var response = await http.PostAsync("api/v1/files", content);
-        Console.WriteLine(await response.Content.ReadAsStringAsync());
-        return response.IsSuccessStatusCode ? 0 : 1;
+        var exit = 0;
+        foreach (var file in files)
+        {
+            try
+            {
+                await using var stream = File.OpenRead(file);
+                using var content = new MultipartFormDataContent();
+                content.Add(new StreamContent(stream), "file", Path.GetFileName(file));
+                var response = await http.PostAsync("api/v1/files", content);
+                var body = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"{Path.GetFileName(file)} -> {body}");
+                if (!response.IsSuccessStatusCode)
+                {
+                    exit = 1;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"{Path.GetFileName(file)} -> {ex.Message}");
+                exit = 1;
+            }
+        }
+        return exit;
     }
 
     private static async Task<int> JobsAsync(HttpClient http, string[] args)
