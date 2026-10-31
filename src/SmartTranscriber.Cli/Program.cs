@@ -64,6 +64,7 @@ public static class Program
               smarttranscriber api summarize <id>
               smarttranscriber api url <media-url>
               smarttranscriber api rename <id> <from> <to>
+              smarttranscriber api retry <id>
                   Talk to the API service (default http://127.0.0.1:8460).
               smarttranscriber db migrate
                   Apply pending DbUp migrations.
@@ -167,6 +168,7 @@ file static class ApiCommand
             "summarize" => await SummarizeAsync(http, args[1..]),
             "url" => await UrlAsync(http, args[1..]),
             "rename" => await RenameAsync(http, args[1..]),
+            "retry" => await RetryAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
     }
@@ -287,6 +289,19 @@ file static class ApiCommand
             return 2;
         }
         var response = await http.PostAsJsonAsync("api/v1/jobs/from-url", new { url });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> RetryAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => !a.StartsWith('-'));
+        if (id is null)
+        {
+            Console.Error.WriteLine("usage: api retry <id>");
+            return 2;
+        }
+        var response = await http.PostAsync($"api/v1/jobs/{id}/retry", null);
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }

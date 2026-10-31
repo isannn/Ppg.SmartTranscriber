@@ -57,6 +57,10 @@ else
                         {
                             <a class="btn btn-sm btn-primary" href="/jobs/@job.Id">View</a>
                         }
+                        @if (job.Status == nameof(JobStatus.Failed))
+                        {
+                            <button class="btn btn-sm btn-outline-warning" @onclick="() => RetryAsync(job.Id)">Retry</button>
+                        }
                     </td>
                 </tr>
             }
@@ -69,6 +73,12 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadAsync();
+    }
+
+    private async Task RetryAsync(Guid id)
+    {
+        await JobService.RetryJobAsync(id);
         await LoadAsync();
     }
 
