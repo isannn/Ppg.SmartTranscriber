@@ -157,6 +157,11 @@ file static class ApiCommand
         var baseUrl = config.GetSection(SmartTranscriberOptions.SectionName)["Api:BaseUrl"]
                       ?? "http://127.0.0.1:8460";
         using var http = new HttpClient { BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/") };
+        var apiToken = Environment.GetEnvironmentVariable("SMARTTRANSCRIBER_API_TOKEN");
+        if (!string.IsNullOrEmpty(apiToken))
+        {
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiToken);
+        }
 
         return args[0] switch
         {

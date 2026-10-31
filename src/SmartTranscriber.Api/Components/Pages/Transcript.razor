@@ -3,6 +3,7 @@
 @inject ITranscriptService Transcripts
 @inject IJobService Jobs
 @inject IJSRuntime JS
+@inject Microsoft.Extensions.Options.IOptions<SmartTranscriber.Core.Options.SmartTranscriberOptions> Opt
 
 <PageTitle>Transcript — SmartTranscriber</PageTitle>
 
@@ -22,11 +23,11 @@
     </p>
     @if (MediaTypes.IsVideo(_job.OriginalFileName))
     {
-        <video @ref="_player" controls src="/api/v1/jobs/@Id/media" style="width:100%; max-height:360px;" class="mb-3"></video>
+        <video @ref="_player" controls src="@MediaSrc" style="width:100%; max-height:360px;" class="mb-3"></video>
     }
     else
     {
-        <audio @ref="_player" controls src="/api/v1/jobs/@Id/media" style="width:100%;" class="mb-3"></audio>
+        <audio @ref="_player" controls src="@MediaSrc" style="width:100%;" class="mb-3"></audio>
     }
 }
 @if (_summaryError is not null)
@@ -145,6 +146,9 @@ else
 
     private string _renameFrom = "";
     private string _renameTo = "";
+    private string MediaSrc =>
+        $"/api/v1/jobs/{Id}/media" +
+        (string.IsNullOrEmpty(Opt.Value.Auth.Token) ? "" : $"?token={Uri.EscapeDataString(Opt.Value.Auth.Token)}");
 
     private async Task RenameSpeakerAsync()
     {
