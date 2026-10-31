@@ -18,6 +18,7 @@ public sealed class SmartTranscriberOptions
     public YtDlpOptions YtDlp { get; set; } = new();
     public WebhookOptions Webhooks { get; set; } = new();
     public ConsumerOptions Consumers { get; set; } = new();
+    public AuthOptions Auth { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -63,6 +64,12 @@ public sealed class YtDlpOptions
     /// <summary>SOCKS proxy; falls back to the TG_PROXY env var when empty.</summary>
     public string Proxy { get; set; } = "";
     public int TimeoutSeconds { get; set; } = 600;
+}
+
+public sealed class AuthOptions
+{
+    /// <summary>Bearer token for /api/v1/* (except /health). Empty = auth disabled.</summary>
+    public string Token { get; set; } = "";
 }
 
 public sealed class WebhookOptions
