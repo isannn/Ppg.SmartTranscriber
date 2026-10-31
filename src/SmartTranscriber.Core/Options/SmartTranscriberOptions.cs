@@ -19,6 +19,7 @@ public sealed class SmartTranscriberOptions
     public WebhookOptions Webhooks { get; set; } = new();
     public ConsumerOptions Consumers { get; set; } = new();
     public AuthOptions Auth { get; set; } = new();
+    public KeyFrameOptions KeyFrames { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -64,6 +65,15 @@ public sealed class YtDlpOptions
     /// <summary>SOCKS proxy; falls back to the TG_PROXY env var when empty.</summary>
     public string Proxy { get; set; } = "";
     public int TimeoutSeconds { get; set; } = 600;
+}
+
+public sealed class KeyFrameOptions
+{
+    public bool Enabled { get; set; } = true;
+    public int MaxFrames { get; set; } = 20;
+    public double SceneThreshold { get; set; } = 0.35;
+    /// <summary>Interval sampling step (sec) when scene-detect finds nothing.</summary>
+    public int FallbackIntervalSec { get; set; } = 15;
 }
 
 public sealed class AuthOptions
