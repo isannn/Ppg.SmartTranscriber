@@ -16,6 +16,7 @@ public sealed class SmartTranscriberOptions
     public WorkerOptions Worker { get; set; } = new();
     public LlmOptions Llm { get; set; } = new();
     public YtDlpOptions YtDlp { get; set; } = new();
+    public WebhookOptions Webhooks { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -63,6 +64,13 @@ public sealed class YtDlpOptions
     /// <summary>SOCKS proxy; falls back to the TG_PROXY env var when empty.</summary>
     public string Proxy { get; set; } = "";
     public int TimeoutSeconds { get; set; } = 600;
+}
+
+public sealed class WebhookOptions
+{
+    /// <summary>HTTP endpoints notified when a job reaches Done/Failed.</summary>
+    public List<string> Endpoints { get; set; } = new();
+    public int TimeoutSeconds { get; set; } = 10;
 }
 
 public sealed class WorkerOptions

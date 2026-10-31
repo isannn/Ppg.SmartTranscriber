@@ -11,6 +11,7 @@ using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
 using SmartTranscriber.Infrastructure.Media;
 using SmartTranscriber.Infrastructure.Persistence;
+using SmartTranscriber.Infrastructure.Webhooks;
 using SmartTranscriber.Infrastructure.Storage;
 using SmartTranscriber.Infrastructure.Stt;
 using SmartTranscriber.Infrastructure.Transcription;
@@ -110,6 +111,7 @@ public static class DependencyInjection
         services.AddTransient<ISummarizer>(sp => sp.GetRequiredService<OpenAiSummarizer>());
         services.AddSingleton<SummarizerChain>();
         services.AddSingleton<IMediaFetcher, YtDlpMediaFetcher>();
+        services.AddHttpClient<IWebhookNotifier, HttpWebhookNotifier>();
         services.AddSingleton<TranscriberChain>();
         return services;
     }
