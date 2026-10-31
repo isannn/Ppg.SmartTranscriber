@@ -37,6 +37,7 @@ public sealed class TranscriptionPipeline(
         try
         {
             job.Status = JobStatus.Processing;
+            job.Progress = 10;
             await jobs.UpdateAsync(job, ct);
 
             await using (var input = await storage.DownloadAsync(job.ObjectName, ct))
@@ -45,11 +46,17 @@ public sealed class TranscriptionPipeline(
                 await input.CopyToAsync(output, ct);
             }
 
+            job.Progress = 25;
+            await jobs.UpdateAsync(job, ct);
+
             var stt = options.Value.Stt;
             var (transcriber, result) = await transcribers.TranscribeAsync(
                 localPath,
                 new TranscribeOptions(stt.DefaultModel, stt.DefaultLanguage, stt.Diarize),
                 ct);
+
+            job.Progress = 90;
+            await jobs.UpdateAsync(job, ct);
 
             foreach (var s in result.Segments)
             {
@@ -58,6 +65,7 @@ public sealed class TranscriptionPipeline(
             await segments.AddRangeAsync(result.Segments, ct);
 
             job.Status = JobStatus.Done;
+            job.Progress = 100;
             job.CompletedAt = DateTime.UtcNow;
             job.Model = result.Model ?? transcriber.Name;
             job.Language = result.Language;

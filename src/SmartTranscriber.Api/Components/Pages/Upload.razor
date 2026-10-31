@@ -7,45 +7,78 @@
 
 <h2>Upload media file</h2>
 
-<InputFile OnChange="OnFileSelected" />
+<InputFile OnChange="OnFileSelected" multiple />
 
 <button class="btn btn-primary mt-2" @onclick="UploadAsync" disabled="@(!CanUpload)">Upload</button>
+
+<hr class="my-4" />
+<h4>Or ingest from URL (YouTube &c.)</h4>
+<div class="input-group" style="max-width:640px">
+    <input class="form-control" placeholder="https://youtube.com/watch?v=…" @bind="_url" />
+    <button class="btn btn-outline-primary" @onclick="UrlAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_url))">Fetch &amp; transcribe</button>
+</div>
 
 @if (_error is not null)
 {
     <div class="alert alert-danger mt-3">@_error</div>
 }
-@if (_uploaded is not null)
+@if (_uploaded.Count > 0)
 {
     <div class="alert alert-success mt-3">
-        Job created: <a href="/jobs/@_uploaded.Id">@_uploaded.Id</a> — @_uploaded.Status
+        @foreach (var j in _uploaded)
+        {
+            <div>Job created: <a href="/jobs/@j.Id">@j.Id</a> — @j.OriginalFileName (@j.Status)</div>
+        }
     </div>
 }
 
 @code {
-    private IBrowserFile? _file;
-    private JobDto? _uploaded;
+    private IReadOnlyList<IBrowserFile> _files = Array.Empty<IBrowserFile>();
+    private readonly List<JobDto> _uploaded = new();
     private string? _error;
     private bool _busy;
+    private string _url = "";
 
-    private bool CanUpload => _file is not null && !_busy;
+    private bool CanUpload => _files.Count > 0 && !_busy;
 
     private void OnFileSelected(InputFileChangeEventArgs e)
     {
-        _file = e.File;
-        _uploaded = null;
+        _files = e.GetMultipleFiles(50);
+        _uploaded.Clear();
         _error = null;
     }
 
     private async Task UploadAsync()
     {
-        if (_file is null) return;
         _busy = true;
         _error = null;
+        _uploaded.Clear();
         try
         {
-            await using var stream = _file.OpenReadStream(4L * 1024 * 1024 * 1024);
-            _uploaded = await Jobs.CreateJobAsync(_file.Name, stream, _file.ContentType);
+            foreach (var file in _files)
+            {
+                await using var stream = file.OpenReadStream(4L * 1024 * 1024 * 1024);
+                _uploaded.Add(await Jobs.CreateJobAsync(file.Name, stream, file.ContentType));
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task UrlAsync()
+    {
+        _busy = true;
+        _error = null;
+        _uploaded.Clear();
+        try
+        {
+            _uploaded.Add(await Jobs.CreateUrlJobAsync(_url.Trim()));
         }
         catch (Exception ex)
         {

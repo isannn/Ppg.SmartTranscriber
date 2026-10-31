@@ -9,6 +9,7 @@ using Npgsql;
 using SmartTranscriber.Core.Options;
 using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
+using SmartTranscriber.Infrastructure.Media;
 using SmartTranscriber.Infrastructure.Persistence;
 using SmartTranscriber.Infrastructure.Storage;
 using SmartTranscriber.Infrastructure.Stt;
@@ -95,6 +96,20 @@ public static class DependencyInjection
 
         services.AddSingleton<ITranscriber, SidecarTranscriber>();
         services.AddSingleton<ITranscriber, WhisperCppTranscriber>();
+        services.AddHttpClient<AcpSummarizer>((sp, client) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<SmartTranscriberOptions>>().Value;
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(30, opts.Llm.TimeoutSeconds));
+        });
+        services.AddHttpClient<OpenAiSummarizer>((sp, client) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<SmartTranscriberOptions>>().Value;
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(30, opts.Llm.TimeoutSeconds));
+        });
+        services.AddTransient<ISummarizer>(sp => sp.GetRequiredService<AcpSummarizer>());
+        services.AddTransient<ISummarizer>(sp => sp.GetRequiredService<OpenAiSummarizer>());
+        services.AddSingleton<SummarizerChain>();
+        services.AddSingleton<IMediaFetcher, YtDlpMediaFetcher>();
         services.AddSingleton<TranscriberChain>();
         return services;
     }

@@ -12,6 +12,8 @@ public class TranscriptionJob
     public string? Model { get; set; }
     public string? Language { get; set; }
     public double? DurationSeconds { get; set; }
+    public string? Summary { get; set; }
+    public int Progress { get; set; }
     public int SegmentCount { get; set; }
 
     public List<TranscriptSegment> Segments { get; set; } = new();

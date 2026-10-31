@@ -51,6 +51,21 @@ public sealed class MinioStorageService(
         return ms;
     }
 
+    public async Task<bool> ExistsAsync(string objectName, CancellationToken ct = default)
+    {
+        try
+        {
+            await client.StatObjectAsync(new StatObjectArgs()
+                .WithBucket(_settings.BucketName)
+                .WithObject(objectName), ct);
+            return true;
+        }
+        catch (Minio.Exceptions.ObjectNotFoundException)
+        {
+            return false;
+        }
+    }
+
     public async Task DeleteAsync(string objectName, CancellationToken ct = default)
     {
         await client.RemoveObjectAsync(new RemoveObjectArgs()

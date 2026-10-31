@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using SmartTranscriber.Core.Domain;
@@ -10,11 +11,12 @@ public sealed class JobService(
     IJobRepository jobs,
     IStorageService storage,
     IJobQueue queue,
+    IServiceProvider services,
     ILogger<JobService> logger) : IJobService
 {
     public async Task<JobDto> CreateJobAsync(string fileName, Stream content, string contentType, CancellationToken ct = default)
     {
-        var objectName = $"{Guid.NewGuid():N}_{Path.GetFileName(fileName)}";
+        var objectName = $"{Guid.NewGuid():N}_{SafeName(Path.GetFileName(fileName))}";
 
         await storage.EnsureBucketAsync(ct);
         await storage.UploadAsync(objectName, content, contentType, ct);
@@ -61,8 +63,127 @@ public sealed class JobService(
         return true;
     }
 
+    public async Task<JobDto> CreateUrlJobAsync(string url, CancellationToken ct = default)
+    {
+        var job = new TranscriptionJob
+        {
+            Id = Guid.NewGuid(),
+            ObjectName = $"url/{Guid.NewGuid():N}",
+            OriginalFileName = url,
+            Status = JobStatus.Downloading,
+            Progress = 2,
+            CreatedAt = DateTime.UtcNow
+        };
+        await jobs.AddAsync(job, ct);
+        _ = Task.Run(() => IngestUrlAsync(job.Id, url));
+        return Map(job);
+    }
+
+    /// <summary>Background: fetch media, upload to S3, mark Pending+enqueue or Failed.</summary>
+    private async Task IngestUrlAsync(Guid jobId, string url)
+    {
+        try
+        {
+            using var scope = services.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IJobRepository>();
+            var store = scope.ServiceProvider.GetRequiredService<IStorageService>();
+            var fetcher = scope.ServiceProvider.GetRequiredService<IMediaFetcher>();
+            var jobQueue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
+
+            var job = await repo.GetByIdAsync(jobId) ?? throw new InvalidOperationException("job gone");
+            var dir = Path.Combine(Path.GetTempPath(), $"st-yt-{jobId:N}");
+            Directory.CreateDirectory(dir);
+            try
+            {
+                var file = await fetcher.FetchAsync(url, dir);
+                var objectName = $"{jobId:N}_{SafeName(Path.GetFileName(file))}";
+                await using (var fs = File.OpenRead(file))
+                {
+                    await store.UploadAsync(objectName, fs, "application/octet-stream");
+                }
+                // rustfs commits asynchronously — PutObject 200 precedes a statable object;
+                // a Pending job would be claimed and fail StatObject within that window
+                for (var i = 0; i < 20 && !await store.ExistsAsync(objectName); i++)
+                {
+                    await Task.Delay(500);
+                }
+                if (!await store.ExistsAsync(objectName))
+                {
+                    throw new InvalidOperationException("uploaded object not visible in storage");
+                }
+                job.ObjectName = objectName;
+                job.OriginalFileName = Path.GetFileName(file);
+                job.Status = JobStatus.Pending;
+                job.Progress = 5;
+                await repo.UpdateAsync(job);
+                await jobQueue.EnqueueAsync(jobId);
+            }
+            finally
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "URL ingest failed for job {JobId}", jobId);
+            try
+            {
+                using var scope = services.CreateScope();
+                var repo = scope.ServiceProvider.GetRequiredService<IJobRepository>();
+                var job = await repo.GetByIdAsync(jobId);
+                if (job is not null)
+                {
+                    job.Status = JobStatus.Failed;
+                    job.ErrorMessage = $"url ingest: {ex.Message}";
+                    await repo.UpdateAsync(job);
+                }
+            }
+            catch (Exception inner)
+            {
+                logger.LogError(inner, "failed to mark URL-ingest job {JobId} as Failed", jobId);
+            }
+        }
+    }
+
+    public async Task<(Stream Stream, string ObjectName)?> DownloadMediaAsync(Guid id, CancellationToken ct = default)
+    {
+        var job = await jobs.GetByIdAsync(id, ct);
+        if (job is null)
+        {
+            return null;
+        }
+        var stream = await storage.DownloadAsync(job.ObjectName, ct);
+        return (stream, job.ObjectName);
+    }
+
+    public async Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default)
+    {
+        var job = await jobs.GetByIdAsync(id, ct);
+        if (job is null)
+        {
+            return null;
+        }
+        if (job.Status != JobStatus.Failed)
+        {
+            return false;
+        }
+        job.Status = JobStatus.Pending;
+        job.Progress = 5;
+        job.ErrorMessage = null;
+        job.CompletedAt = null;
+        await jobs.UpdateAsync(job, ct);
+        await queue.EnqueueAsync(id, ct);
+        return true;
+    }
+
+    /// <summary>S3 object keys: brackets/spaces break GetObject on rustfs — keep [A-Za-z0-9._-].</summary>
+    private static string SafeName(string name)
+    {
+        return string.Concat(name.Select(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' ? c : '_'));
+    }
+
     internal static JobDto Map(TranscriptionJob j) => new(
         j.Id, j.ObjectName, j.OriginalFileName, j.Status.ToString(),
         j.CreatedAt, j.CompletedAt, j.ErrorMessage, j.Model, j.Language,
-        j.DurationSeconds, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count);
+        j.DurationSeconds, j.Summary, j.Progress, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count);
 }
