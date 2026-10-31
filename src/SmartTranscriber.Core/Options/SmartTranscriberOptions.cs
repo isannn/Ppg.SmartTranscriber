@@ -17,6 +17,7 @@ public sealed class SmartTranscriberOptions
     public LlmOptions Llm { get; set; } = new();
     public YtDlpOptions YtDlp { get; set; } = new();
     public WebhookOptions Webhooks { get; set; } = new();
+    public ConsumerOptions Consumers { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -71,6 +72,16 @@ public sealed class WebhookOptions
     /// <summary>HTTP endpoints notified when a job reaches Done/Failed.</summary>
     public List<string> Endpoints { get; set; } = new();
     public int TimeoutSeconds { get; set; } = 10;
+}
+
+public sealed class ConsumerOptions
+{
+    /// <summary>
+    /// InterviewGrocker records root — when set, a finished job exports
+    /// its transcript as `<OriginalFileName>.txt` into this folder
+    /// (IG RecordsScanner walks it for *.txt).
+    /// </summary>
+    public string IgExportDir { get; set; } = "";
 }
 
 public sealed class WorkerOptions

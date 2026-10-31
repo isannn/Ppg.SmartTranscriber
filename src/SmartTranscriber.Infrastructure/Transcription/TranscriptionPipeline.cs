@@ -18,6 +18,7 @@ public sealed class TranscriptionPipeline(
     IStorageService storage,
     TranscriberChain transcribers,
     IWebhookNotifier webhooks,
+    ITranscriptRenderer renderer,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
 {
@@ -74,6 +75,7 @@ public sealed class TranscriptionPipeline(
             await jobs.UpdateAsync(job, ct);
             logger.LogInformation("Job {JobId} done via {Transcriber}: {Count} segments",
                 job.Id, transcriber.Name, result.Segments.Count);
+            ExportForIg(job, result.Segments);
             await webhooks.NotifyJobFinishedAsync(job, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -94,6 +96,30 @@ public sealed class TranscriptionPipeline(
         finally
         {
             try { File.Delete(localPath); } catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>
+    /// Writes the transcript to the InterviewGrocker records folder as
+    /// `<OriginalFileName>.txt` — the convention its RecordsScanner walks.
+    /// </summary>
+    private void ExportForIg(TranscriptionJob job, System.Collections.Generic.IReadOnlyList<TranscriptSegment> segs)
+    {
+        var dir = options.Value.Consumers.IgExportDir;
+        if (string.IsNullOrWhiteSpace(dir))
+        {
+            return;
+        }
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var name = $"{Path.GetFileName(job.OriginalFileName)}.txt";
+            File.WriteAllText(Path.Combine(dir, name), renderer.RenderText(job, segs));
+            logger.LogInformation("Exported transcript for IG: {Name}", name);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "IG transcript export failed for job {JobId}", job.Id);
         }
     }
 }
