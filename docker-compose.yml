@@ -16,9 +16,23 @@ services:
       SmartTranscriber__Minio__AccessKey: "${S3_ACCESS_KEY:-minioadmin}"
       SmartTranscriber__Minio__SecretKey: "${S3_SECRET_KEY:-minioadmin}"
       SmartTranscriber__Stt__SidecarUrl: "http://stt-svc:8461"
+      # llm_bridge runs on the host (it spawns `devin.exe acp` and reads
+      # %APPDATA%/devin/credentials.toml): py -3.11 tools\llm_bridge\server.py
+      SmartTranscriber__Llm__BridgeUrl: "http://host.docker.internal:8464"
+      SmartTranscriber__Llm__ApiKey: "${OPENROUTER_API_KEY:-}"
     depends_on:
       s3:
         condition: service_healthy
+      stt-svc:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8460/api/v1/health -o /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     volumes:
       - ./smarttranscriber.json:/app/smarttranscriber.json:ro
     networks:
@@ -36,6 +50,22 @@ services:
       STT_PORT: "8461"
       HF_TOKEN: "${HF_TOKEN:-}"
       HF_HUB_OFFLINE: "${HF_HUB_OFFLINE:-0}"
+    # CPU-only in compose. GPU (RTX): run the sidecar from the
+    # TranscribiroNova venv on the host instead and point the app at
+    # http://host.docker.internal:8461. On a Linux host uncomment:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8461/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     volumes:
       - hf_cache:/root/.cache/huggingface
     networks:
