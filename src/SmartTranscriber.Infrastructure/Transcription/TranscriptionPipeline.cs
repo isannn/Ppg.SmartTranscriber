@@ -51,11 +51,29 @@ public sealed class TranscriptionPipeline(
             job.Progress = 25;
             await jobs.UpdateAsync(job, ct);
 
+            // live fraction from the sidecar mapped into the 30-90% band,
+            // throttled so the DB sees a write at most every ~3s
+            var lastWrite = DateTime.MinValue;
+            var lastPct = 25;
+            var reporter = new Progress<double>(frac =>
+            {
+                var pct = Math.Clamp(30 + (int)(frac * 60), 30, 89);
+                var now = DateTime.UtcNow;
+                if (pct <= lastPct || (now - lastWrite).TotalSeconds < 3)
+                {
+                    return;
+                }
+                lastPct = pct;
+                lastWrite = now;
+                job.Progress = pct;
+                _ = jobs.UpdateAsync(job, CancellationToken.None);
+            });
+
             var stt = options.Value.Stt;
             var (transcriber, result) = await transcribers.TranscribeAsync(
                 localPath,
                 new TranscribeOptions(stt.DefaultModel, stt.DefaultLanguage, stt.Diarize),
-                ct);
+                ct, reporter);
 
             job.Progress = 90;
             await jobs.UpdateAsync(job, ct);

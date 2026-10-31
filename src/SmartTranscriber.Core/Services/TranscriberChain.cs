@@ -12,7 +12,8 @@ namespace SmartTranscriber.Core.Services;
 public sealed class TranscriberChain(IEnumerable<ITranscriber> transcribers, ILogger<TranscriberChain> logger)
 {
     public async Task<(ITranscriber Transcriber, TranscriptResult Result)> TranscribeAsync(
-        string mediaPath, TranscribeOptions options, CancellationToken ct = default)
+        string mediaPath, TranscribeOptions options, CancellationToken ct = default,
+        IProgress<double>? progress = null)
     {
         var errors = new List<string>();
         foreach (var t in transcribers)
@@ -25,7 +26,7 @@ public sealed class TranscriberChain(IEnumerable<ITranscriber> transcribers, ILo
             }
             try
             {
-                var result = await t.TranscribeAsync(mediaPath, options, ct);
+                var result = await t.TranscribeAsync(mediaPath, options, ct, progress);
                 return (t, result);
             }
             catch (OperationCanceledException) { throw; }

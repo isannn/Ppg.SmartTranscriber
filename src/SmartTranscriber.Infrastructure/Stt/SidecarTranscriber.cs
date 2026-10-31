@@ -39,8 +39,10 @@ public sealed class SidecarTranscriber(
         }
     }
 
-    public async Task<TranscriptResult> TranscribeAsync(string mediaPath, TranscribeOptions transcribeOptions, CancellationToken ct = default)
+    public async Task<TranscriptResult> TranscribeAsync(string mediaPath, TranscribeOptions transcribeOptions, CancellationToken ct = default, IProgress<double>? progress = null)
     {
+        var jobId = progress is null ? "" : Guid.NewGuid().ToString("N");
+
         await using var stream = File.OpenRead(mediaPath);
         using var content = new MultipartFormDataContent();
         using var fileContent = new StreamContent(stream);
@@ -48,10 +50,32 @@ public sealed class SidecarTranscriber(
 
         var query = $"?model={Uri.EscapeDataString(transcribeOptions.Model ?? "")}" +
                     $"&language={Uri.EscapeDataString(transcribeOptions.Language ?? "")}" +
-                    $"&diarize={transcribeOptions.Diarize.ToString().ToLowerInvariant()}";
+                    $"&diarize={transcribeOptions.Diarize.ToString().ToLowerInvariant()}" +
+                    (jobId == "" ? "" : $"&job_id={jobId}");
 
         logger.LogInformation("Sending {File} to stt sidecar at {BaseUrl}", mediaPath, BaseUrl);
-        using var response = await http.PostAsync($"{BaseUrl}/transcribe{query}", content, ct);
+        var postTask = http.PostAsync($"{BaseUrl}/transcribe{query}", content, ct);
+
+        if (progress is not null)
+        {
+            while (!postTask.IsCompleted)
+            {
+                try
+                {
+                    var p = await http.GetFromJsonAsync<SidecarProgress>(
+                        $"{BaseUrl}/progress/{jobId}", ct);
+                    if (p?.Frac is double frac)
+                    {
+                        progress.Report(frac);
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch { /* progress is best-effort */ }
+                try { await Task.Delay(3000, ct); } catch (OperationCanceledException) { throw; }
+            }
+        }
+
+        using var response = await postTask;
         var body = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
         {
@@ -70,6 +94,11 @@ public sealed class SidecarTranscriber(
         }).ToList();
 
         return new TranscriptResult(segments, payload.Model, payload.Duration, payload.Language);
+    }
+
+    private sealed class SidecarProgress
+    {
+        [JsonPropertyName("frac")] public double? Frac { get; set; }
     }
 
     private sealed class SidecarResponse
