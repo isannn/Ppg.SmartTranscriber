@@ -83,7 +83,12 @@ else
                                @onclick:stopPropagation="true"
                                @onchange="e => SaveSpeakerAsync(s, e.Value?.ToString())" />
                     </td>
-                    <td>@s.Text</td>
+                    <td>
+                        <input class="form-control form-control-sm"
+                               value="@s.Text"
+                               @onclick:stopPropagation="true"
+                               @onchange="e => SaveTextAsync(s, e.Value?.ToString())" />
+                    </td>
                 </tr>
             }
         </tbody>
@@ -162,6 +167,14 @@ else
     private async Task SaveSpeakerAsync(SegmentDto segment, string? speaker)
     {
         await Transcripts.UpdateSpeakerAsync(segment.Id, speaker);
+    }
+
+    private async Task SaveTextAsync(SegmentDto segment, string? text)
+    {
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            await Transcripts.UpdateTextAsync(segment.Id, text);
+        }
     }
 
     private static string Fmt(double seconds)

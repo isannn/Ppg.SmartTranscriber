@@ -25,6 +25,7 @@ public sealed record SegmentDto(
     string Text);
 
 public sealed record SpeakerUpdateRequest(string? Speaker);
+public sealed record TextUpdateRequest(string Text);
 
 public sealed record TranscriptResult(
     IReadOnlyList<TranscriptSegment> Segments,

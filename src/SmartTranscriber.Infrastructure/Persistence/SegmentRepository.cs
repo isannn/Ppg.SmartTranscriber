@@ -37,7 +37,17 @@ public sealed class SegmentRepository(NpgsqlDataSource dataSource) : ISegmentRep
         var affected = await conn.ExecuteAsync(
             "UPDATE transcript_segments SET speaker = @speaker WHERE id = @segmentId",
             new { segmentId, speaker });
-        return affected > 0;
+        return affected == 1;
+    }
+
+    public async Task<bool> UpdateTextAsync(long segmentId, string text, CancellationToken ct = default)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        // text_vector is a generated column — it re-indexes itself
+        var affected = await conn.ExecuteAsync(
+            "UPDATE transcript_segments SET text = @text WHERE id = @segmentId",
+            new { segmentId, text });
+        return affected == 1;
     }
 
     public async Task<int> RenameSpeakerAsync(Guid jobId, string from, string to, CancellationToken ct = default)
