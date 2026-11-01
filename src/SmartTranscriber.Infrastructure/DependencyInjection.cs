@@ -109,6 +109,7 @@ public static class DependencyInjection
         services.AddTransient<ISummarizer>(sp => sp.GetRequiredService<AcpSummarizer>());
         services.AddTransient<ISummarizer>(sp => sp.GetRequiredService<OpenAiSummarizer>());
         services.AddSingleton<SummarizerChain>();
+        services.AddSingleton<ExportService>();
         services.AddSingleton<IMediaFetcher, YtDlpMediaFetcher>();
         services.AddSingleton<IKeyFrameExtractor, FfmpegKeyFrameExtractor>();
         services.AddScoped<IFrameRepository, MediaFrameRepository>();
