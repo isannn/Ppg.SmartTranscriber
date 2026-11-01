@@ -55,7 +55,7 @@ else if (_segments.Count == 0)
 else
 {
     <div class="input-group input-group-sm mb-2" style="max-width:560px">
-        <span class="input-group-text">Rename speaker</span>
+        <span class="input-group-text">Rename / merge speaker</span>
         <input class="form-control" placeholder="SPEAKER_00" @bind="_renameFrom" />
         <input class="form-control" placeholder="New name" @bind="_renameTo" />
         <button class="btn btn-outline-primary" @onclick="RenameSpeakerAsync"

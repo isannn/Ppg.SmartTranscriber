@@ -107,7 +107,19 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
             return BadRequest(new { error = "from and to required" });
         }
         var updated = await transcripts.RenameSpeakerAsync(id, request.From, request.To, ct);
-        return updated is null ? NotFound() : Ok(new { updated });
+        return Ok(new { updated });
+    }
+
+    /// <summary>Merge one speaker label into another (diarization split).</summary>
+    [HttpPost("{id:guid}/speakers/merge")]
+    public async Task<IActionResult> MergeSpeaker(Guid id, [FromBody] RenameRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.From) || string.IsNullOrWhiteSpace(request.To))
+        {
+            return BadRequest(new { error = "from/to required" });
+        }
+        var merged = await transcripts.RenameSpeakerAsync(id, request.From, request.To, ct);
+        return Ok(new { merged });
     }
 
     public sealed record RenameRequest(string From, string To);
