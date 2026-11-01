@@ -20,6 +20,7 @@ public sealed class SmartTranscriberOptions
     public ConsumerOptions Consumers { get; set; } = new();
     public AuthOptions Auth { get; set; } = new();
     public KeyFrameOptions KeyFrames { get; set; } = new();
+    public SummaryOptions Summary { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -65,6 +66,12 @@ public sealed class YtDlpOptions
     /// <summary>SOCKS proxy; falls back to the TG_PROXY env var when empty.</summary>
     public string Proxy { get; set; } = "";
     public int TimeoutSeconds { get; set; } = 600;
+}
+
+public sealed class SummaryOptions
+{
+    /// <summary>Generate a summary automatically when a job reaches Done.</summary>
+    public bool AutoGenerate { get; set; } = false;
 }
 
 public sealed class KeyFrameOptions
