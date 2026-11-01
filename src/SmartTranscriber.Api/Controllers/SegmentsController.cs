@@ -16,4 +16,13 @@ public class SegmentsController(ITranscriptService transcripts) : ControllerBase
             ? NoContent()
             : NotFound();
     }
+
+    /// <summary>Edit a segment's text (generated FTS column re-indexes itself).</summary>
+    [HttpPut("{id:long}/text")]
+    public async Task<IActionResult> UpdateText(long id, [FromBody] TextUpdateRequest request, CancellationToken ct)
+    {
+        return await transcripts.UpdateTextAsync(id, request.Text, ct)
+            ? NoContent()
+            : NotFound();
+    }
 }

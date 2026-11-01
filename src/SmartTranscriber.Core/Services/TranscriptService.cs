@@ -27,6 +27,9 @@ public sealed class TranscriptService(
     public Task<bool> UpdateSpeakerAsync(long segmentId, string? speaker, CancellationToken ct = default)
         => segments.UpdateSpeakerAsync(segmentId, speaker, ct);
 
+    public Task<bool> UpdateTextAsync(long segmentId, string text, CancellationToken ct = default)
+        => segments.UpdateTextAsync(segmentId, text, ct);
+
     public async Task<string?> RenderTranscriptAsync(Guid jobId, CancellationToken ct = default)
     {
         var job = await jobs.GetByIdAsync(jobId, ct);
