@@ -21,6 +21,7 @@ public sealed class TranscriptionPipeline(
     ITranscriptRenderer renderer,
     IKeyFrameExtractor keyframes,
     IFrameRepository frames,
+    SummarizerChain summarizer,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
 {
@@ -97,6 +98,7 @@ public sealed class TranscriptionPipeline(
                 job.Id, transcriber.Name, result.Segments.Count);
             ExportForIg(job, result.Segments);
             await ExtractFramesAsync(job, localPath, ct);
+            await AutoSummarizeAsync(job, result.Segments, ct);
             await webhooks.NotifyJobFinishedAsync(job, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -117,6 +119,25 @@ public sealed class TranscriptionPipeline(
         finally
         {
             try { File.Delete(localPath); } catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>Generate a summary right after Done when enabled — best-effort.</summary>
+    private async Task AutoSummarizeAsync(TranscriptionJob job, System.Collections.Generic.IReadOnlyList<TranscriptSegment> segs, CancellationToken ct)
+    {
+        if (!options.Value.Summary.AutoGenerate)
+        {
+            return;
+        }
+        try
+        {
+            job.Summary = await summarizer.SummarizeAsync(renderer.RenderText(job, segs), null, ct);
+            await jobs.UpdateAsync(job, ct);
+            logger.LogInformation("Job {JobId}: auto-summary stored ({Chars} chars)", job.Id, job.Summary.Length);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Auto-summary failed for job {JobId}", job.Id);
         }
     }
 
