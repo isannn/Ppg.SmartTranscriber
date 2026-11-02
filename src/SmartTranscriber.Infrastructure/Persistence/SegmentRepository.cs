@@ -37,6 +37,10 @@ public sealed class SegmentRepository(NpgsqlDataSource dataSource) : ISegmentRep
         var affected = await conn.ExecuteAsync(
             "UPDATE transcript_segments SET speaker = @speaker WHERE id = @segmentId",
             new { segmentId, speaker });
+        if (affected == 1)
+        {
+            await InvalidateSummaryAsync(conn, segmentId);
+        }
         return affected == 1;
     }
 
@@ -47,7 +51,20 @@ public sealed class SegmentRepository(NpgsqlDataSource dataSource) : ISegmentRep
         var affected = await conn.ExecuteAsync(
             "UPDATE transcript_segments SET text = @text WHERE id = @segmentId",
             new { segmentId, text });
+        if (affected == 1)
+        {
+            await InvalidateSummaryAsync(conn, segmentId);
+        }
         return affected == 1;
+    }
+
+    /// <summary>A segment edit makes the job's cached summary stale — drop it.</summary>
+    private static async Task InvalidateSummaryAsync(NpgsqlConnection conn, long segmentId)
+    {
+        await conn.ExecuteAsync(
+            "UPDATE transcription_jobs SET summary = NULL " +
+            "WHERE id = (SELECT job_id FROM transcript_segments WHERE id = @segmentId)",
+            new { segmentId });
     }
 
     public async Task<int> DeleteByJobAsync(Guid jobId, CancellationToken ct = default)
@@ -61,9 +78,16 @@ public sealed class SegmentRepository(NpgsqlDataSource dataSource) : ISegmentRep
     public async Task<int> RenameSpeakerAsync(Guid jobId, string from, string to, CancellationToken ct = default)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
-        return await conn.ExecuteAsync(
+        var affected = await conn.ExecuteAsync(
             "UPDATE transcript_segments SET speaker = @to WHERE job_id = @jobId AND speaker = @from",
             new { jobId, from, to });
+        if (affected > 0)
+        {
+            await conn.ExecuteAsync(
+                "UPDATE transcription_jobs SET summary = NULL WHERE id = @jobId",
+                new { jobId });
+        }
+        return affected;
     }
 
     public async Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, int limit, SearchFilters? filters = null, CancellationToken ct = default)
