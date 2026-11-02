@@ -1,0 +1,5 @@
+- [x] spec
+- [ ] RetentionOptions (MaxAgeDays=0, SweepMinutes=60)
+- [ ] RetentionWorker BackgroundService + DI
+- [ ] S3 deletes: media object + per-frame objects via IFrameRepository
+- [ ] build, MR, merge

@@ -51,7 +51,10 @@ public sealed class SidecarTranscriber(
         var query = $"?model={Uri.EscapeDataString(transcribeOptions.Model ?? "")}" +
                     $"&language={Uri.EscapeDataString(transcribeOptions.Language ?? "")}" +
                     $"&diarize={transcribeOptions.Diarize.ToString().ToLowerInvariant()}" +
-                    (jobId == "" ? "" : $"&job_id={jobId}");
+                    (jobId == "" ? "" : $"&job_id={jobId}") +
+                    (string.IsNullOrWhiteSpace(transcribeOptions.Hotwords)
+                        ? ""
+                        : $"&hotwords={Uri.EscapeDataString(transcribeOptions.Hotwords)}");
 
         logger.LogInformation("Sending {File} to stt sidecar at {BaseUrl}", mediaPath, BaseUrl);
         var postTask = http.PostAsync($"{BaseUrl}/transcribe{query}", content, ct);

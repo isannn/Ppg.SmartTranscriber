@@ -41,4 +41,12 @@ public sealed class MediaFrameRepository(NpgsqlDataSource dataSource) : IFrameRe
             "FROM media_frames WHERE job_id = @jobId AND frame_no = @frameNo",
             new { jobId, frameNo });
     }
+
+    public async Task UpdateOcrAsync(Guid jobId, int frameNo, string ocrText, CancellationToken ct = default)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await conn.ExecuteAsync(
+            "UPDATE media_frames SET ocr_text = @ocrText WHERE job_id = @jobId AND frame_no = @frameNo",
+            new { jobId, frameNo, ocrText });
+    }
 }

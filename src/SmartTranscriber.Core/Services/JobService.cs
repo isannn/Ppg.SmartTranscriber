@@ -12,10 +12,11 @@ public sealed class JobService(
     IStorageService storage,
     IJobQueue queue,
     IServiceProvider services,
+    ISegmentRepository segments,
     IWebhookNotifier webhooks,
     ILogger<JobService> logger) : IJobService
 {
-    public async Task<JobDto> CreateJobAsync(string fileName, Stream content, string contentType, CancellationToken ct = default)
+    public async Task<JobDto> CreateJobAsync(string fileName, Stream content, string contentType, string? callbackUrl = null, string? hotwords = null, int priority = 0, CancellationToken ct = default)
     {
         var objectName = $"{Guid.NewGuid():N}_{SafeName(Path.GetFileName(fileName))}";
 
@@ -28,7 +29,10 @@ public sealed class JobService(
             ObjectName = objectName,
             OriginalFileName = Path.GetFileName(fileName),
             Status = JobStatus.Pending,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            CallbackUrl = callbackUrl,
+            Hotwords = hotwords,
+            Priority = priority
         };
         await jobs.AddAsync(job, ct);
         await queue.EnqueueAsync(job.Id, ct);
@@ -43,10 +47,23 @@ public sealed class JobService(
         return job is null ? null : Map(job);
     }
 
-    public async Task<IReadOnlyList<JobDto>> ListJobsAsync(JobStatus? status, int limit, int offset, CancellationToken ct = default)
+    public async Task<IReadOnlyList<JobDto>> ListJobsAsync(JobStatus? status, string? tag, int limit, int offset, CancellationToken ct = default)
     {
-        var list = await jobs.ListAsync(status, limit, offset, ct);
+        var list = await jobs.ListAsync(status, tag, limit, offset, ct);
         return list.Select(Map).ToList();
+    }
+
+    /// <summary>Replace the comma-separated tag list on a job.</summary>
+    public async Task<bool> UpdateTagsAsync(Guid id, string tags, CancellationToken ct = default)
+    {
+        var job = await jobs.GetByIdAsync(id, ct);
+        if (job is null)
+        {
+            return false;
+        }
+        job.Tags = string.IsNullOrWhiteSpace(tags) ? null : tags.Trim().Trim(',');
+        await jobs.UpdateAsync(job, ct);
+        return true;
     }
 
     public async Task<bool> DeleteJobAsync(Guid id, bool deleteFile, CancellationToken ct = default)
@@ -64,7 +81,7 @@ public sealed class JobService(
         return true;
     }
 
-    public async Task<JobDto> CreateUrlJobAsync(string url, CancellationToken ct = default)
+    public async Task<JobDto> CreateUrlJobAsync(string url, string? callbackUrl = null, string? hotwords = null, int priority = 0, CancellationToken ct = default)
     {
         var job = new TranscriptionJob
         {
@@ -73,7 +90,10 @@ public sealed class JobService(
             OriginalFileName = url,
             Status = JobStatus.Downloading,
             Progress = 2,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            CallbackUrl = callbackUrl,
+            Hotwords = hotwords,
+            Priority = priority
         };
         await jobs.AddAsync(job, ct);
         _ = Task.Run(() => IngestUrlAsync(job.Id, url));
@@ -159,6 +179,92 @@ public sealed class JobService(
         return (stream, job.ObjectName);
     }
 
+    /// <summary>Reset the job to Pending with new ASR params and re-enqueue.</summary>
+    public async Task<JobDto?> RetranscribeAsync(Guid id, string? model, string? language, bool? diarize, string? hotwords = null, CancellationToken ct = default)
+    {
+        var job = await jobs.GetByIdAsync(id, ct);
+        if (job is null)
+        {
+            return null;
+        }
+        await segments.DeleteByJobAsync(id, ct);
+        job.Model = model;
+        job.Language = language;
+        job.Diarize = diarize ?? true;
+        job.Hotwords = hotwords;
+        job.Status = JobStatus.Pending;
+        job.Progress = 0;
+        job.ErrorMessage = null;
+        job.Summary = null;
+        job.CompletedAt = null;
+        job.DurationSeconds = null;
+        await jobs.UpdateAsync(job, ct);
+        await queue.EnqueueAsync(job.Id, ct);
+        return Map(job);
+    }
+
+    /// <summary>Bulk ops over a list of ids — delete (job+media+frames) or retry failed.</summary>
+    public async Task<IReadOnlyList<(Guid Id, bool Ok, string Detail)>> BulkAsync(string action, IReadOnlyList<Guid> ids, CancellationToken ct = default)
+    {
+        var results = new List<(Guid, bool, string)>();
+        var frameRepo = services.GetService<IFrameRepository>();
+        foreach (var id in ids)
+        {
+            try
+            {
+                switch (action)
+                {
+                    case "delete":
+                        if (frameRepo is not null)
+                        {
+                            foreach (var f in await frameRepo.GetByJobAsync(id, ct))
+                            {
+                                await storage.DeleteAsync(f.ObjectName, ct);
+                            }
+                        }
+                        results.Add((id, await DeleteJobAsync(id, deleteFile: true, ct), "deleted"));
+                        break;
+                    case "retry":
+                        var retried = await RetryJobAsync(id, ct);
+                        results.Add((id, retried == true, retried is null ? "not found" : retried == false ? "not Failed" : "queued"));
+                        break;
+                    default:
+                        results.Add((id, false, $"unknown action {action}"));
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                results.Add((id, false, ex.Message));
+            }
+        }
+        return results;
+    }
+
+    public Task<JobStatsDto> GetStatsAsync(CancellationToken ct = default) => jobs.GetStatsAsync(ct);
+
+    /// <summary>Positional diff of two jobs' transcripts — same-media retranscribe comparison.</summary>
+    public async Task<CompareDto?> CompareAsync(Guid a, Guid b, CancellationToken ct = default)
+    {
+        var jobA = await jobs.GetByIdAsync(a, ct);
+        var jobB = await jobs.GetByIdAsync(b, ct);
+        if (jobA is null || jobB is null)
+        {
+            return null;
+        }
+        var rows = new List<CompareRow>();
+        var count = Math.Max(jobA.Segments.Count, jobB.Segments.Count);
+        for (var i = 0; i < count; i++)
+        {
+            var sa = i < jobA.Segments.Count ? jobA.Segments[i] : null;
+            var sb = i < jobB.Segments.Count ? jobB.Segments[i] : null;
+            var aText = sa?.Text ?? "";
+            var bText = sb?.Text ?? "";
+            rows.Add(new CompareRow(i, sa?.StartTime ?? 0, sb?.StartTime ?? 0, aText, bText, aText == bText));
+        }
+        return new CompareDto(Map(jobA), Map(jobB), rows);
+    }
+
     public async Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default)
     {
         var job = await jobs.GetByIdAsync(id, ct);
@@ -188,5 +294,6 @@ public sealed class JobService(
     internal static JobDto Map(TranscriptionJob j) => new(
         j.Id, j.ObjectName, j.OriginalFileName, j.Status.ToString(),
         j.CreatedAt, j.CompletedAt, j.ErrorMessage, j.Model, j.Language,
-        j.DurationSeconds, j.Summary, j.Progress, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count);
+        j.DurationSeconds, j.Summary, j.Progress, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count,
+        j.CallbackUrl, j.Priority, j.Tags);
 }

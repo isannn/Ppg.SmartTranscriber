@@ -56,17 +56,24 @@ public static class Program
             Usage:
               smarttranscriber transcribe <file> [-o out.txt] [--model M] [--language L] [--no-diarize]
                   Transcribe a media file standalone (stt sidecar).
-              smarttranscriber api upload <file> [file...] | api upload --dir <path>
+              smarttranscriber api upload <file> [file...] | api upload --dir <path> [--callback URL]
               smarttranscriber api jobs [--status Pending|Processing|Done|Failed] [--limit N]
               smarttranscriber api job <id>
               smarttranscriber api transcript <id> [-o file.txt] [--format txt|json]
               smarttranscriber api search <query> [--limit N]
               smarttranscriber api summarize <id> [--model M] [--prompt P] [--regenerate]
-              smarttranscriber api url <media-url>
+              smarttranscriber api url <media-url> [--callback URL]
               smarttranscriber api rename <id> <from> <to>
               smarttranscriber api merge <id> <from> <to>
               smarttranscriber api segment-text <id> <text>
               smarttranscriber api export [-o file]
+              smarttranscriber api import <file>
+              smarttranscriber api retranscribe <id> [--model M] [--language L] [--no-diarize]
+              smarttranscriber api bulk delete|retry <id...>
+              smarttranscriber api stats
+              smarttranscriber api tag <id> <tag1,tag2>
+              smarttranscriber api jobs [--tag X]
+              smarttranscriber api compare <idA> <idB>
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -181,7 +188,13 @@ file static class ApiCommand
             "frames" => await FramesAsync(http, args[1..]),
             "merge" => await MergeAsync(http, args[1..]),
             "segment-text" => await SegmentTextAsync(http, args[1..]),
+            "retranscribe" => await RetranscribeAsync(http, args[1..]),
+            "bulk" => await BulkAsync(http, args[1..]),
+            "stats" => await SimpleGetAsync(http, "api/v1/stats"),
+            "tag" => await TagAsync(http, args[1..]),
+            "compare" => await CompareAsync(http, args[1..]),
             "export" => await ExportAsync(http, args[1..]),
+            "import" => await ImportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
     }
@@ -201,6 +214,9 @@ file static class ApiCommand
     private static async Task<int> UploadAsync(HttpClient http, string[] args)
     {
         var dir = TranscribeCommand.OptValue(args, "--dir");
+        var callback = TranscribeCommand.OptValue(args, "--callback");
+        var hotwords = TranscribeCommand.OptValue(args, "--hotwords");
+        var priority = TranscribeCommand.OptValue(args, "--priority");
         var files = new List<string>();
         if (dir is not null)
         {
@@ -230,6 +246,18 @@ file static class ApiCommand
                 await using var stream = File.OpenRead(file);
                 using var content = new MultipartFormDataContent();
                 content.Add(new StreamContent(stream), "file", Path.GetFileName(file));
+                if (callback is not null)
+                {
+                    content.Add(new StringContent(callback), "callback_url");
+                }
+                if (hotwords is not null)
+                {
+                    content.Add(new StringContent(hotwords), "hotwords");
+                }
+                if (priority is not null)
+                {
+                    content.Add(new StringContent(priority), "priority");
+                }
                 var response = await http.PostAsync("api/v1/files", content);
                 var body = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"{Path.GetFileName(file)} -> {body}");
@@ -250,8 +278,10 @@ file static class ApiCommand
     private static async Task<int> JobsAsync(HttpClient http, string[] args)
     {
         var status = TranscribeCommand.OptValue(args, "--status");
+        var tag = TranscribeCommand.OptValue(args, "--tag");
         var limit = TranscribeCommand.OptValue(args, "--limit") ?? "50";
-        var url = $"api/v1/jobs?limit={limit}" + (status is null ? "" : $"&status={status}");
+        var url = $"api/v1/jobs?limit={limit}" + (status is null ? "" : $"&status={status}")
+                  + (tag is null ? "" : $"&tag={Uri.EscapeDataString(tag)}");
         Console.WriteLine(await http.GetStringAsync(url));
         return 0;
     }
@@ -301,7 +331,14 @@ file static class ApiCommand
             Console.Error.WriteLine("usage: api url <media-url>");
             return 2;
         }
-        var response = await http.PostAsJsonAsync("api/v1/jobs/from-url", new { url });
+        var response = await http.PostAsJsonAsync("api/v1/jobs/from-url",
+            new
+            {
+                url,
+                callbackUrl = TranscribeCommand.OptValue(args, "--callback"),
+                hotwords = TranscribeCommand.OptValue(args, "--hotwords"),
+                priority = int.TryParse(TranscribeCommand.OptValue(args, "--priority"), out var pr) ? pr : 0
+            });
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }
@@ -398,6 +435,88 @@ file static class ApiCommand
         }
         var response = await http.PutAsJsonAsync(
             $"api/v1/segments/{pos[0]}/text", new { text = string.Join(' ', pos[1..]) });
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> RetranscribeAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => !a.StartsWith('-'));
+        if (id is null)
+        {
+            Console.Error.WriteLine("usage: api retranscribe <id> [--model M] [--language L] [--no-diarize]");
+            return 2;
+        }
+        var response = await http.PostAsJsonAsync($"api/v1/jobs/{id}/retranscribe", new
+        {
+            model = TranscribeCommand.OptValue(args, "--model"),
+            language = TranscribeCommand.OptValue(args, "--language"),
+            diarize = args.Contains("--no-diarize") ? (bool?)false : null,
+            hotwords = TranscribeCommand.OptValue(args, "--hotwords")
+        });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> BulkAsync(HttpClient http, string[] args)
+    {
+        var action = args.FirstOrDefault(a => a is "delete" or "retry");
+        var ids = args.Where(a => Guid.TryParse(a, out _)).ToList();
+        if (action is null || ids.Count == 0)
+        {
+            Console.Error.WriteLine("usage: api bulk delete|retry <id...>");
+            return 2;
+        }
+        var response = await http.PostAsJsonAsync("api/v1/jobs/bulk", new { action, ids });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> TagAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => Guid.TryParse(a, out _));
+        var tags = args.LastOrDefault(a => !a.StartsWith('-') && a != id);
+        if (id is null || tags is null)
+        {
+            Console.Error.WriteLine("usage: api tag <id> <tag1,tag2>");
+            return 2;
+        }
+        var response = await http.PutAsJsonAsync($"api/v1/jobs/{id}/tags", new { tags });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> ImportAsync(HttpClient http, string[] args)
+    {
+        var file = args.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a));
+        if (file is null)
+        {
+            Console.Error.WriteLine("usage: api import <file> (export dump JSON)");
+            return 2;
+        }
+        var json = await File.ReadAllTextAsync(file);
+        var response = await http.PostAsync("api/v1/import",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> CompareAsync(HttpClient http, string[] args)
+    {
+        var ids = args.Where(a => Guid.TryParse(a, out _)).ToList();
+        if (ids.Count < 2)
+        {
+            Console.Error.WriteLine("usage: api compare <idA> <idB>");
+            return 2;
+        }
+        var response = await http.GetAsync($"api/v1/jobs/compare?a={ids[0]}&b={ids[1]}");
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> SimpleGetAsync(HttpClient http, string path)
+    {
+        var response = await http.GetAsync(path);
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }
 

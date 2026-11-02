@@ -21,6 +21,8 @@ public sealed class SmartTranscriberOptions
     public AuthOptions Auth { get; set; } = new();
     public KeyFrameOptions KeyFrames { get; set; } = new();
     public SummaryOptions Summary { get; set; } = new();
+    public WatchFolderOptions WatchFolder { get; set; } = new();
+    public RetentionOptions Retention { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -68,6 +70,22 @@ public sealed class YtDlpOptions
     public int TimeoutSeconds { get; set; } = 600;
 }
 
+public sealed class RetentionOptions
+{
+    /// <summary>Delete Done/Failed jobs older than this. 0 = disabled.</summary>
+    public int MaxAgeDays { get; set; } = 0;
+    public int SweepMinutes { get; set; } = 60;
+}
+
+public sealed class WatchFolderOptions
+{
+    /// <summary>Inbox directory — new media files here become jobs. Empty = disabled.</summary>
+    public string Dir { get; set; } = "";
+    public int PollSeconds { get; set; } = 30;
+    /// <summary>Subdir under Dir processed files move into (empty = leave in place).</summary>
+    public string DoneDir { get; set; } = "done";
+}
+
 public sealed class SummaryOptions
 {
     /// <summary>Generate a summary automatically when a job reaches Done.</summary>
@@ -111,4 +129,6 @@ public sealed class WorkerOptions
     public int PollIntervalSeconds { get; set; } = 5;
     public string TempDir { get; set; } = "";
     public bool Enabled { get; set; } = true;
+    /// <summary>Parallel drain consumers — how many jobs run concurrently.</summary>
+    public int Concurrency { get; set; } = 1;
 }

@@ -15,7 +15,10 @@ public sealed record JobDto(
     double? DurationSeconds,
     string? Summary,
     int Progress,
-    int SegmentCount);
+    int SegmentCount,
+    string? CallbackUrl = null,
+    int Priority = 0,
+    string? Tags = null);
 
 public sealed record SegmentDto(
     long Id,
@@ -42,7 +45,20 @@ public sealed record SearchFilters(
     DateTime? To = null,
     string? Model = null);
 
+public sealed record JobStatsDto(
+    int Jobs,
+    Dictionary<string, int> ByStatus,
+    IReadOnlyList<JobStatsModel> ByModel,
+    IReadOnlyList<JobStatsDay> ByDay,
+    double TotalDurationSeconds);
+public sealed record JobStatsModel(string? Model, int Jobs, double AvgDurationSeconds);
+public sealed record JobStatsDay(string Date, int Jobs);
+
+public sealed record CompareRow(int Index, double AStart, double BStart, string AText, string BText, bool Same);
+public sealed record CompareDto(JobDto JobA, JobDto JobB, IReadOnlyList<CompareRow> Rows);
+
 public sealed record SearchHitDto(
+    string Type,
     long SegmentId,
     Guid JobId,
     string OriginalFileName,

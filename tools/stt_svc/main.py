@@ -43,6 +43,7 @@ async def transcribe(
     diarize: bool = Query(True),
     num_speakers: int | None = Query(None),
     job_id: str = Query("", description="optional progress key — poll GET /progress/{job_id}"),
+    hotwords: str = Query("", description="comma-separated glossary terms to bias ASR"),
 ) -> dict:
     filename = file.filename or "media.bin"
     ext = os.path.splitext(filename)[1].lower()
@@ -66,6 +67,7 @@ async def transcribe(
                 wav_path,
                 model_size=model or core.DEFAULT_MODEL,
                 language=language or None,
+                hotwords=hotwords or None,
                 progress=lambda f: _PROGRESS.update(
                     {job_id: {"frac": f, "stage": "transcribing"}}) if job_id else None,
             )

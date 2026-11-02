@@ -8,4 +8,5 @@ public class MediaFrame
     public int FrameNo { get; set; }
     public double TimeSeconds { get; set; }
     public string ObjectName { get; set; } = "";
+    public string? OcrText { get; set; }
 }

@@ -3,6 +3,7 @@ using Dapper;
 using Npgsql;
 
 using SmartTranscriber.Core.Domain;
+using SmartTranscriber.Core.Dto;
 using SmartTranscriber.Core.Ports;
 
 namespace SmartTranscriber.Infrastructure.Persistence;
@@ -12,7 +13,8 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
     private const string JobColumns =
         "id, object_name AS ObjectName, original_file_name AS OriginalFileName, status, " +
         "created_at AS CreatedAt, completed_at AS CompletedAt, error_message AS ErrorMessage, " +
-        "model, language, duration_seconds AS DurationSeconds, summary AS Summary, progress AS Progress";
+        "model, language, duration_seconds AS DurationSeconds, summary AS Summary, progress AS Progress, " +
+        "callback_url AS CallbackUrl, diarize AS Diarize, hotwords AS Hotwords, priority AS Priority, tags AS Tags";
 
     public async Task<TranscriptionJob?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
@@ -32,16 +34,25 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         return job;
     }
 
-    public async Task<IReadOnlyList<TranscriptionJob>> ListAsync(JobStatus? status, int limit, int offset, CancellationToken ct = default)
+    public async Task<IReadOnlyList<TranscriptionJob>> ListAsync(JobStatus? status, string? tag, int limit, int offset, CancellationToken ct = default)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
+        var conditions = new List<string>();
+        if (status is not null)
+        {
+            conditions.Add("status = @status");
+        }
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            conditions.Add("(',' || coalesce(tags, '') || ',') LIKE '%,' || @tag || ',%'");
+        }
         var sql = $"SELECT {JobColumns}, " +
                   "(SELECT count(*) FROM transcript_segments s WHERE s.job_id = j.id) AS segment_count " +
                   "FROM transcription_jobs j " +
-                  (status is null ? "" : "WHERE status = @status ") +
+                  (conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions) + " ") +
                   "ORDER BY created_at DESC LIMIT @limit OFFSET @offset";
 
-        var rows = await conn.QueryAsync<JobRow>(sql, new { status = status?.ToString(), limit, offset });
+        var rows = await conn.QueryAsync<JobRow>(sql, new { status = status?.ToString(), tag, limit, offset });
         return rows.Select(r => r.ToJob()).ToList();
     }
 
@@ -51,7 +62,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         return await conn.QuerySingleOrDefaultAsync<TranscriptionJob>(
             $"UPDATE transcription_jobs SET status = 'Processing' " +
             "WHERE id = (SELECT id FROM transcription_jobs WHERE status = 'Pending' " +
-            "ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) " +
+            "ORDER BY priority DESC, created_at FOR UPDATE SKIP LOCKED LIMIT 1) " +
             $"RETURNING {JobColumns}");
     }
 
@@ -60,8 +71,8 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await conn.ExecuteAsync(
             "INSERT INTO transcription_jobs " +
-            "(id, object_name, original_file_name, status, created_at, completed_at, error_message, model, language, duration_seconds, summary) " +
-            "VALUES (@Id, @ObjectName, @OriginalFileName, @Status, @CreatedAt, @CompletedAt, @ErrorMessage, @Model, @Language, @DurationSeconds, @Summary)",
+            "(id, object_name, original_file_name, status, created_at, completed_at, error_message, model, language, duration_seconds, summary, callback_url, diarize, hotwords, priority) " +
+            "VALUES (@Id, @ObjectName, @OriginalFileName, @Status, @CreatedAt, @CompletedAt, @ErrorMessage, @Model, @Language, @DurationSeconds, @Summary, @CallbackUrl, @Diarize, @Hotwords, @Priority)",
             new
             {
                 job.Id,
@@ -74,7 +85,11 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 job.Model,
                 job.Language,
                 job.DurationSeconds,
-                job.Summary
+                job.Summary,
+                job.CallbackUrl,
+                job.Diarize,
+                job.Hotwords,
+                job.Priority
             });
     }
 
@@ -85,7 +100,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
             "UPDATE transcription_jobs SET status = @Status, completed_at = @CompletedAt, " +
             "error_message = @ErrorMessage, model = @Model, language = @Language, " +
             "duration_seconds = @DurationSeconds, summary = @Summary, progress = @Progress, " +
-            "object_name = @ObjectName, original_file_name = @OriginalFileName WHERE id = @Id",
+            "object_name = @ObjectName, original_file_name = @OriginalFileName, callback_url = @CallbackUrl, diarize = @Diarize, hotwords = @Hotwords, priority = @Priority, tags = @Tags WHERE id = @Id",
             new
             {
                 job.Id,
@@ -98,7 +113,12 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 job.Summary,
                 job.Progress,
                 job.ObjectName,
-                job.OriginalFileName
+                job.OriginalFileName,
+                job.CallbackUrl,
+                job.Diarize,
+                job.Hotwords,
+                job.Priority,
+                job.Tags
             });
     }
 
@@ -106,6 +126,30 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await conn.ExecuteAsync("DELETE FROM transcription_jobs WHERE id = @id", new { id });
+    }
+
+    public async Task<JobStatsDto> GetStatsAsync(CancellationToken ct = default)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        var total = await conn.ExecuteScalarAsync<int>("SELECT count(*) FROM transcription_jobs");
+        var byStatus = (await conn.QueryAsync<StatusCount>(
+                "SELECT status AS Status, count(*) AS Count FROM transcription_jobs GROUP BY status"))
+            .ToDictionary(r => r.Status, r => r.Count);
+        var byModel = (await conn.QueryAsync<JobStatsModel>(
+                "SELECT model AS Model, count(*) AS Jobs, coalesce(avg(duration_seconds), 0) AS AvgDurationSeconds " +
+                "FROM transcription_jobs WHERE status = 'Done' GROUP BY model ORDER BY Jobs DESC")).ToList();
+        var byDay = (await conn.QueryAsync<JobStatsDay>(
+                "SELECT to_char(created_at, 'YYYY-MM-DD') AS Date, count(*) AS Jobs " +
+                "FROM transcription_jobs GROUP BY 1 ORDER BY 1 DESC LIMIT 30")).ToList();
+        var totalDuration = await conn.ExecuteScalarAsync<double>(
+            "SELECT coalesce(sum(duration_seconds), 0) FROM transcription_jobs WHERE status = 'Done'");
+        return new JobStatsDto(total, byStatus, byModel, byDay, totalDuration);
+    }
+
+    private sealed class StatusCount
+    {
+        public string Status { get; set; } = "";
+        public int Count { get; set; }
     }
 
     private sealed class JobRow
@@ -122,6 +166,11 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         public double? DurationSeconds { get; set; }
         public string? Summary { get; set; }
         public int Progress { get; set; }
+        public string? CallbackUrl { get; set; }
+        public bool Diarize { get; set; } = true;
+        public string? Hotwords { get; set; }
+        public int Priority { get; set; }
+        public string? Tags { get; set; }
         public int SegmentCount { get; set; }
 
         public TranscriptionJob ToJob()
@@ -140,6 +189,11 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 DurationSeconds = DurationSeconds,
                 Summary = Summary,
                 Progress = Progress,
+                CallbackUrl = CallbackUrl,
+                Diarize = Diarize,
+                Hotwords = Hotwords,
+                Priority = Priority,
+                Tags = Tags,
                 SegmentCount = SegmentCount
             };
         }
