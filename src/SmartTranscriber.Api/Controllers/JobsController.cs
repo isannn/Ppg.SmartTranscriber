@@ -131,6 +131,14 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
 
     public sealed record TagsRequest(string Tags);
 
+    /// <summary>Positional transcript diff of two jobs — compare re-transcriptions.</summary>
+    [HttpGet("compare")]
+    public async Task<IActionResult> Compare([FromQuery] Guid a, [FromQuery] Guid b, CancellationToken ct)
+    {
+        var result = await jobs.CompareAsync(a, b, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     /// <summary>Aggregate stats for dashboards.</summary>
     [HttpGet("/api/v1/stats")]
     public async Task<IActionResult> Stats(CancellationToken ct)
