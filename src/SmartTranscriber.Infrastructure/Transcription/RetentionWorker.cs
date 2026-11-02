@@ -51,7 +51,7 @@ public sealed class RetentionWorker(
         var frames = scope.ServiceProvider.GetRequiredService<IFrameRepository>();
         var storage = scope.ServiceProvider.GetRequiredService<IStorageService>();
 
-        var jobs = await jobService.ListJobsAsync(null, int.MaxValue, 0, ct);
+        var jobs = await jobService.ListJobsAsync(null, null, int.MaxValue, 0, ct);
         var stale = jobs.Where(j =>
             (j.Status == nameof(JobStatus.Done) || j.Status == nameof(JobStatus.Failed))
             && j.CreatedAt < cutoff).ToList();

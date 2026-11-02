@@ -9,7 +9,8 @@ public interface IJobService
     /// <summary>Creates a Downloading job and ingests media from a URL in the background.</summary>
     Task<JobDto> CreateUrlJobAsync(string url, string? callbackUrl = null, string? hotwords = null, int priority = 0, CancellationToken ct = default);
     Task<JobDto?> GetJobAsync(Guid id, CancellationToken ct = default);
-    Task<IReadOnlyList<JobDto>> ListJobsAsync(JobStatus? status, int limit, int offset, CancellationToken ct = default);
+    Task<IReadOnlyList<JobDto>> ListJobsAsync(JobStatus? status, string? tag, int limit, int offset, CancellationToken ct = default);
+    Task<bool> UpdateTagsAsync(Guid id, string tags, CancellationToken ct = default);
     Task<bool> DeleteJobAsync(Guid id, bool deleteFile, CancellationToken ct = default);
     Task<(Stream Stream, string ObjectName)?> DownloadMediaAsync(Guid id, CancellationToken ct = default);
     /// <summary>Requeues a Failed job. Null = not found, false = not Failed.</summary>

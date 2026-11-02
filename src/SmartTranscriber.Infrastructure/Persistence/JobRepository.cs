@@ -14,7 +14,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         "id, object_name AS ObjectName, original_file_name AS OriginalFileName, status, " +
         "created_at AS CreatedAt, completed_at AS CompletedAt, error_message AS ErrorMessage, " +
         "model, language, duration_seconds AS DurationSeconds, summary AS Summary, progress AS Progress, " +
-        "callback_url AS CallbackUrl, diarize AS Diarize, hotwords AS Hotwords, priority AS Priority";
+        "callback_url AS CallbackUrl, diarize AS Diarize, hotwords AS Hotwords, priority AS Priority, tags AS Tags";
 
     public async Task<TranscriptionJob?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
@@ -34,16 +34,25 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         return job;
     }
 
-    public async Task<IReadOnlyList<TranscriptionJob>> ListAsync(JobStatus? status, int limit, int offset, CancellationToken ct = default)
+    public async Task<IReadOnlyList<TranscriptionJob>> ListAsync(JobStatus? status, string? tag, int limit, int offset, CancellationToken ct = default)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
+        var conditions = new List<string>();
+        if (status is not null)
+        {
+            conditions.Add("status = @status");
+        }
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            conditions.Add("(',' || coalesce(tags, '') || ',') LIKE '%,' || @tag || ',%'");
+        }
         var sql = $"SELECT {JobColumns}, " +
                   "(SELECT count(*) FROM transcript_segments s WHERE s.job_id = j.id) AS segment_count " +
                   "FROM transcription_jobs j " +
-                  (status is null ? "" : "WHERE status = @status ") +
+                  (conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions) + " ") +
                   "ORDER BY created_at DESC LIMIT @limit OFFSET @offset";
 
-        var rows = await conn.QueryAsync<JobRow>(sql, new { status = status?.ToString(), limit, offset });
+        var rows = await conn.QueryAsync<JobRow>(sql, new { status = status?.ToString(), tag, limit, offset });
         return rows.Select(r => r.ToJob()).ToList();
     }
 
@@ -91,7 +100,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
             "UPDATE transcription_jobs SET status = @Status, completed_at = @CompletedAt, " +
             "error_message = @ErrorMessage, model = @Model, language = @Language, " +
             "duration_seconds = @DurationSeconds, summary = @Summary, progress = @Progress, " +
-            "object_name = @ObjectName, original_file_name = @OriginalFileName, callback_url = @CallbackUrl, diarize = @Diarize, hotwords = @Hotwords, priority = @Priority WHERE id = @Id",
+            "object_name = @ObjectName, original_file_name = @OriginalFileName, callback_url = @CallbackUrl, diarize = @Diarize, hotwords = @Hotwords, priority = @Priority, tags = @Tags WHERE id = @Id",
             new
             {
                 job.Id,
@@ -108,7 +117,8 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 job.CallbackUrl,
                 job.Diarize,
                 job.Hotwords,
-                job.Priority
+                job.Priority,
+                job.Tags
             });
     }
 
@@ -160,6 +170,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         public bool Diarize { get; set; } = true;
         public string? Hotwords { get; set; }
         public int Priority { get; set; }
+        public string? Tags { get; set; }
         public int SegmentCount { get; set; }
 
         public TranscriptionJob ToJob()
@@ -182,6 +193,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 Diarize = Diarize,
                 Hotwords = Hotwords,
                 Priority = Priority,
+                Tags = Tags,
                 SegmentCount = SegmentCount
             };
         }
