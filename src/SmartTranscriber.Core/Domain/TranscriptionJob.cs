@@ -18,6 +18,8 @@ public class TranscriptionJob
     public string? CallbackUrl { get; set; }
     /// <summary>Run diarization for this job (retranscribe knob).</summary>
     public bool Diarize { get; set; } = true;
+    /// <summary>Comma-separated glossary terms biasing ASR (per-job).</summary>
+    public string? Hotwords { get; set; }
     public int SegmentCount { get; set; }
 
     public List<TranscriptSegment> Segments { get; set; } = new();

@@ -55,11 +55,11 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
         {
             return BadRequest(new { error = "url required" });
         }
-        var job = await jobs.CreateUrlJobAsync(request.Url, request.CallbackUrl, ct);
+        var job = await jobs.CreateUrlJobAsync(request.Url, request.CallbackUrl, request.Hotwords, ct);
         return Accepted(new { job.Id, job.Status });
     }
 
-    public sealed record UrlRequest(string Url, string? CallbackUrl = null);
+    public sealed record UrlRequest(string Url, string? CallbackUrl = null, string? Hotwords = null);
 
     /// <summary>
     /// LLM summary. GET returns cached (404 if none), POST regenerates+stores.
@@ -115,11 +115,11 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     [HttpPost("{id:guid}/retranscribe")]
     public async Task<IActionResult> Retranscribe(Guid id, [FromBody] RetranscribeRequest? request, CancellationToken ct)
     {
-        var job = await jobs.RetranscribeAsync(id, request?.Model, request?.Language, request?.Diarize, ct);
+        var job = await jobs.RetranscribeAsync(id, request?.Model, request?.Language, request?.Diarize, request?.Hotwords, ct);
         return job is null ? NotFound() : Accepted(job);
     }
 
-    public sealed record RetranscribeRequest(string? Model = null, string? Language = null, bool? Diarize = null);
+    public sealed record RetranscribeRequest(string? Model = null, string? Language = null, bool? Diarize = null, string? Hotwords = null);
 
     /// <summary>Merge one speaker label into another (diarization split).</summary>
     [HttpPost("{id:guid}/speakers/merge")]

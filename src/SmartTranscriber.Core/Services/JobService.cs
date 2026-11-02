@@ -16,7 +16,7 @@ public sealed class JobService(
     IWebhookNotifier webhooks,
     ILogger<JobService> logger) : IJobService
 {
-    public async Task<JobDto> CreateJobAsync(string fileName, Stream content, string contentType, string? callbackUrl = null, CancellationToken ct = default)
+    public async Task<JobDto> CreateJobAsync(string fileName, Stream content, string contentType, string? callbackUrl = null, string? hotwords = null, CancellationToken ct = default)
     {
         var objectName = $"{Guid.NewGuid():N}_{SafeName(Path.GetFileName(fileName))}";
 
@@ -30,7 +30,8 @@ public sealed class JobService(
             OriginalFileName = Path.GetFileName(fileName),
             Status = JobStatus.Pending,
             CreatedAt = DateTime.UtcNow,
-            CallbackUrl = callbackUrl
+            CallbackUrl = callbackUrl,
+            Hotwords = hotwords
         };
         await jobs.AddAsync(job, ct);
         await queue.EnqueueAsync(job.Id, ct);
@@ -66,7 +67,7 @@ public sealed class JobService(
         return true;
     }
 
-    public async Task<JobDto> CreateUrlJobAsync(string url, string? callbackUrl = null, CancellationToken ct = default)
+    public async Task<JobDto> CreateUrlJobAsync(string url, string? callbackUrl = null, string? hotwords = null, CancellationToken ct = default)
     {
         var job = new TranscriptionJob
         {
@@ -76,7 +77,8 @@ public sealed class JobService(
             Status = JobStatus.Downloading,
             Progress = 2,
             CreatedAt = DateTime.UtcNow,
-            CallbackUrl = callbackUrl
+            CallbackUrl = callbackUrl,
+            Hotwords = hotwords
         };
         await jobs.AddAsync(job, ct);
         _ = Task.Run(() => IngestUrlAsync(job.Id, url));
@@ -163,7 +165,7 @@ public sealed class JobService(
     }
 
     /// <summary>Reset the job to Pending with new ASR params and re-enqueue.</summary>
-    public async Task<JobDto?> RetranscribeAsync(Guid id, string? model, string? language, bool? diarize, CancellationToken ct = default)
+    public async Task<JobDto?> RetranscribeAsync(Guid id, string? model, string? language, bool? diarize, string? hotwords = null, CancellationToken ct = default)
     {
         var job = await jobs.GetByIdAsync(id, ct);
         if (job is null)
@@ -174,6 +176,7 @@ public sealed class JobService(
         job.Model = model;
         job.Language = language;
         job.Diarize = diarize ?? true;
+        job.Hotwords = hotwords;
         job.Status = JobStatus.Pending;
         job.Progress = 0;
         job.ErrorMessage = null;

@@ -204,6 +204,7 @@ file static class ApiCommand
     {
         var dir = TranscribeCommand.OptValue(args, "--dir");
         var callback = TranscribeCommand.OptValue(args, "--callback");
+        var hotwords = TranscribeCommand.OptValue(args, "--hotwords");
         var files = new List<string>();
         if (dir is not null)
         {
@@ -236,6 +237,10 @@ file static class ApiCommand
                 if (callback is not null)
                 {
                     content.Add(new StringContent(callback), "callback_url");
+                }
+                if (hotwords is not null)
+                {
+                    content.Add(new StringContent(hotwords), "hotwords");
                 }
                 var response = await http.PostAsync("api/v1/files", content);
                 var body = await response.Content.ReadAsStringAsync();
@@ -309,7 +314,7 @@ file static class ApiCommand
             return 2;
         }
         var response = await http.PostAsJsonAsync("api/v1/jobs/from-url",
-            new { url, callbackUrl = TranscribeCommand.OptValue(args, "--callback") });
+            new { url, callbackUrl = TranscribeCommand.OptValue(args, "--callback"), hotwords = TranscribeCommand.OptValue(args, "--hotwords") });
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }
@@ -421,7 +426,8 @@ file static class ApiCommand
         {
             model = TranscribeCommand.OptValue(args, "--model"),
             language = TranscribeCommand.OptValue(args, "--language"),
-            diarize = args.Contains("--no-diarize") ? (bool?)false : null
+            diarize = args.Contains("--no-diarize") ? (bool?)false : null,
+            hotwords = TranscribeCommand.OptValue(args, "--hotwords")
         });
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;

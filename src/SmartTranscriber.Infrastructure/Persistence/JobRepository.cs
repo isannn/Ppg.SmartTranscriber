@@ -13,7 +13,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         "id, object_name AS ObjectName, original_file_name AS OriginalFileName, status, " +
         "created_at AS CreatedAt, completed_at AS CompletedAt, error_message AS ErrorMessage, " +
         "model, language, duration_seconds AS DurationSeconds, summary AS Summary, progress AS Progress, " +
-        "callback_url AS CallbackUrl, diarize AS Diarize";
+        "callback_url AS CallbackUrl, diarize AS Diarize, hotwords AS Hotwords";
 
     public async Task<TranscriptionJob?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
@@ -61,8 +61,8 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await conn.ExecuteAsync(
             "INSERT INTO transcription_jobs " +
-            "(id, object_name, original_file_name, status, created_at, completed_at, error_message, model, language, duration_seconds, summary, callback_url, diarize) " +
-            "VALUES (@Id, @ObjectName, @OriginalFileName, @Status, @CreatedAt, @CompletedAt, @ErrorMessage, @Model, @Language, @DurationSeconds, @Summary, @CallbackUrl, @Diarize)",
+            "(id, object_name, original_file_name, status, created_at, completed_at, error_message, model, language, duration_seconds, summary, callback_url, diarize, hotwords) " +
+            "VALUES (@Id, @ObjectName, @OriginalFileName, @Status, @CreatedAt, @CompletedAt, @ErrorMessage, @Model, @Language, @DurationSeconds, @Summary, @CallbackUrl, @Diarize, @Hotwords)",
             new
             {
                 job.Id,
@@ -77,7 +77,8 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 job.DurationSeconds,
                 job.Summary,
                 job.CallbackUrl,
-                job.Diarize
+                job.Diarize,
+                job.Hotwords
             });
     }
 
@@ -88,7 +89,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
             "UPDATE transcription_jobs SET status = @Status, completed_at = @CompletedAt, " +
             "error_message = @ErrorMessage, model = @Model, language = @Language, " +
             "duration_seconds = @DurationSeconds, summary = @Summary, progress = @Progress, " +
-            "object_name = @ObjectName, original_file_name = @OriginalFileName, callback_url = @CallbackUrl, diarize = @Diarize WHERE id = @Id",
+            "object_name = @ObjectName, original_file_name = @OriginalFileName, callback_url = @CallbackUrl, diarize = @Diarize, hotwords = @Hotwords WHERE id = @Id",
             new
             {
                 job.Id,
@@ -129,6 +130,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
         public int Progress { get; set; }
         public string? CallbackUrl { get; set; }
         public bool Diarize { get; set; } = true;
+        public string? Hotwords { get; set; }
         public int SegmentCount { get; set; }
 
         public TranscriptionJob ToJob()
@@ -149,6 +151,7 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
                 Progress = Progress,
                 CallbackUrl = CallbackUrl,
                 Diarize = Diarize,
+                Hotwords = Hotwords,
                 SegmentCount = SegmentCount
             };
         }
