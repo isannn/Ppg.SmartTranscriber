@@ -188,6 +188,44 @@ public sealed class JobService(
         return Map(job);
     }
 
+    /// <summary>Bulk ops over a list of ids — delete (job+media+frames) or retry failed.</summary>
+    public async Task<IReadOnlyList<(Guid Id, bool Ok, string Detail)>> BulkAsync(string action, IReadOnlyList<Guid> ids, CancellationToken ct = default)
+    {
+        var results = new List<(Guid, bool, string)>();
+        var frameRepo = services.GetService<IFrameRepository>();
+        foreach (var id in ids)
+        {
+            try
+            {
+                switch (action)
+                {
+                    case "delete":
+                        if (frameRepo is not null)
+                        {
+                            foreach (var f in await frameRepo.GetByJobAsync(id, ct))
+                            {
+                                await storage.DeleteAsync(f.ObjectName, ct);
+                            }
+                        }
+                        results.Add((id, await DeleteJobAsync(id, deleteFile: true, ct), "deleted"));
+                        break;
+                    case "retry":
+                        var retried = await RetryJobAsync(id, ct);
+                        results.Add((id, retried == true, retried is null ? "not found" : retried == false ? "not Failed" : "queued"));
+                        break;
+                    default:
+                        results.Add((id, false, $"unknown action {action}"));
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                results.Add((id, false, ex.Message));
+            }
+        }
+        return results;
+    }
+
     public async Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default)
     {
         var job = await jobs.GetByIdAsync(id, ct);
