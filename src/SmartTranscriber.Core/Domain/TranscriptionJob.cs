@@ -14,6 +14,8 @@ public class TranscriptionJob
     public double? DurationSeconds { get; set; }
     public string? Summary { get; set; }
     public int Progress { get; set; }
+    /// <summary>Per-job webhook target — notified on Done/Failed in addition to global endpoints.</summary>
+    public string? CallbackUrl { get; set; }
     public int SegmentCount { get; set; }
 
     public List<TranscriptSegment> Segments { get; set; } = new();

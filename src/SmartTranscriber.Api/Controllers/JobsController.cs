@@ -55,11 +55,11 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
         {
             return BadRequest(new { error = "url required" });
         }
-        var job = await jobs.CreateUrlJobAsync(request.Url, ct);
+        var job = await jobs.CreateUrlJobAsync(request.Url, request.CallbackUrl, ct);
         return Accepted(new { job.Id, job.Status });
     }
 
-    public sealed record UrlRequest(string Url);
+    public sealed record UrlRequest(string Url, string? CallbackUrl = null);
 
     /// <summary>
     /// LLM summary. GET returns cached (404 if none), POST regenerates+stores.

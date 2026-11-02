@@ -15,7 +15,7 @@ public sealed class JobService(
     IWebhookNotifier webhooks,
     ILogger<JobService> logger) : IJobService
 {
-    public async Task<JobDto> CreateJobAsync(string fileName, Stream content, string contentType, CancellationToken ct = default)
+    public async Task<JobDto> CreateJobAsync(string fileName, Stream content, string contentType, string? callbackUrl = null, CancellationToken ct = default)
     {
         var objectName = $"{Guid.NewGuid():N}_{SafeName(Path.GetFileName(fileName))}";
 
@@ -28,7 +28,8 @@ public sealed class JobService(
             ObjectName = objectName,
             OriginalFileName = Path.GetFileName(fileName),
             Status = JobStatus.Pending,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            CallbackUrl = callbackUrl
         };
         await jobs.AddAsync(job, ct);
         await queue.EnqueueAsync(job.Id, ct);
@@ -64,7 +65,7 @@ public sealed class JobService(
         return true;
     }
 
-    public async Task<JobDto> CreateUrlJobAsync(string url, CancellationToken ct = default)
+    public async Task<JobDto> CreateUrlJobAsync(string url, string? callbackUrl = null, CancellationToken ct = default)
     {
         var job = new TranscriptionJob
         {
@@ -73,7 +74,8 @@ public sealed class JobService(
             OriginalFileName = url,
             Status = JobStatus.Downloading,
             Progress = 2,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            CallbackUrl = callbackUrl
         };
         await jobs.AddAsync(job, ct);
         _ = Task.Run(() => IngestUrlAsync(job.Id, url));
@@ -188,5 +190,6 @@ public sealed class JobService(
     internal static JobDto Map(TranscriptionJob j) => new(
         j.Id, j.ObjectName, j.OriginalFileName, j.Status.ToString(),
         j.CreatedAt, j.CompletedAt, j.ErrorMessage, j.Model, j.Language,
-        j.DurationSeconds, j.Summary, j.Progress, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count);
+        j.DurationSeconds, j.Summary, j.Progress, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count,
+        j.CallbackUrl);
 }

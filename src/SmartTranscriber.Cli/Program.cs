@@ -56,13 +56,13 @@ public static class Program
             Usage:
               smarttranscriber transcribe <file> [-o out.txt] [--model M] [--language L] [--no-diarize]
                   Transcribe a media file standalone (stt sidecar).
-              smarttranscriber api upload <file> [file...] | api upload --dir <path>
+              smarttranscriber api upload <file> [file...] | api upload --dir <path> [--callback URL]
               smarttranscriber api jobs [--status Pending|Processing|Done|Failed] [--limit N]
               smarttranscriber api job <id>
               smarttranscriber api transcript <id> [-o file.txt] [--format txt|json]
               smarttranscriber api search <query> [--limit N]
               smarttranscriber api summarize <id> [--model M] [--prompt P] [--regenerate]
-              smarttranscriber api url <media-url>
+              smarttranscriber api url <media-url> [--callback URL]
               smarttranscriber api rename <id> <from> <to>
               smarttranscriber api merge <id> <from> <to>
               smarttranscriber api segment-text <id> <text>
@@ -201,6 +201,7 @@ file static class ApiCommand
     private static async Task<int> UploadAsync(HttpClient http, string[] args)
     {
         var dir = TranscribeCommand.OptValue(args, "--dir");
+        var callback = TranscribeCommand.OptValue(args, "--callback");
         var files = new List<string>();
         if (dir is not null)
         {
@@ -230,6 +231,10 @@ file static class ApiCommand
                 await using var stream = File.OpenRead(file);
                 using var content = new MultipartFormDataContent();
                 content.Add(new StreamContent(stream), "file", Path.GetFileName(file));
+                if (callback is not null)
+                {
+                    content.Add(new StringContent(callback), "callback_url");
+                }
                 var response = await http.PostAsync("api/v1/files", content);
                 var body = await response.Content.ReadAsStringAsync();
                 Console.WriteLine($"{Path.GetFileName(file)} -> {body}");
@@ -301,7 +306,8 @@ file static class ApiCommand
             Console.Error.WriteLine("usage: api url <media-url>");
             return 2;
         }
-        var response = await http.PostAsJsonAsync("api/v1/jobs/from-url", new { url });
+        var response = await http.PostAsJsonAsync("api/v1/jobs/from-url",
+            new { url, callbackUrl = TranscribeCommand.OptValue(args, "--callback") });
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }

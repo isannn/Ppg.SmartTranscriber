@@ -22,7 +22,7 @@ public class FilesController(IJobService jobs) : ControllerBase
         }
 
         await using var stream = file.OpenReadStream();
-        var job = await jobs.CreateJobAsync(file.FileName, stream, file.ContentType, ct);
+        var job = await jobs.CreateJobAsync(file.FileName, stream, file.ContentType, Request.Form["callback_url"], ct);
         return AcceptedAtAction(nameof(JobsController.GetJob), "Jobs", new { id = job.Id }, job);
     }
 
@@ -45,7 +45,7 @@ public class FilesController(IJobService jobs) : ControllerBase
             try
             {
                 await using var stream = file.OpenReadStream();
-                var job = await jobs.CreateJobAsync(file.FileName, stream, file.ContentType, ct);
+                var job = await jobs.CreateJobAsync(file.FileName, stream, file.ContentType, Request.Form["callback_url"], ct);
                 results.Add(new { id = job.Id, fileName = file.FileName, status = job.Status });
             }
             catch (Exception ex)
