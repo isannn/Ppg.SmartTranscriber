@@ -67,6 +67,7 @@ public static class Program
               smarttranscriber api merge <id> <from> <to>
               smarttranscriber api segment-text <id> <text>
               smarttranscriber api export [-o file]
+              smarttranscriber api import <file>
               smarttranscriber api retranscribe <id> [--model M] [--language L] [--no-diarize]
               smarttranscriber api bulk delete|retry <id...>
               smarttranscriber api stats
@@ -191,6 +192,7 @@ file static class ApiCommand
             "stats" => await SimpleGetAsync(http, "api/v1/stats"),
             "tag" => await TagAsync(http, args[1..]),
             "export" => await ExportAsync(http, args[1..]),
+            "import" => await ImportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
     }
@@ -477,6 +479,21 @@ file static class ApiCommand
             return 2;
         }
         var response = await http.PutAsJsonAsync($"api/v1/jobs/{id}/tags", new { tags });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> ImportAsync(HttpClient http, string[] args)
+    {
+        var file = args.FirstOrDefault(a => !a.StartsWith('-') && File.Exists(a));
+        if (file is null)
+        {
+            Console.Error.WriteLine("usage: api import <file> (export dump JSON)");
+            return 2;
+        }
+        var json = await File.ReadAllTextAsync(file);
+        var response = await http.PostAsync("api/v1/import",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }
