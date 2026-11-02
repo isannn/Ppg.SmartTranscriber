@@ -1,4 +1,4 @@
-namespace SmartTranscriber.Api.Controllers;
+namespace SmartTranscriber.Core;
 
 public static class MediaTypes
 {

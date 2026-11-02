@@ -79,6 +79,7 @@ public static class DependencyInjection
         services.AddScoped<IStorageService, MinioStorageService>();
         services.AddScoped<TranscriptionPipeline>();
         services.AddHostedService<TranscriptionWorker>();
+        services.AddHostedService<WatchFolderWorker>();
 
         return services;
     }

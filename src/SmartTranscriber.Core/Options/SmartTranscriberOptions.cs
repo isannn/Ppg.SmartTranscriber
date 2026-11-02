@@ -21,6 +21,7 @@ public sealed class SmartTranscriberOptions
     public AuthOptions Auth { get; set; } = new();
     public KeyFrameOptions KeyFrames { get; set; } = new();
     public SummaryOptions Summary { get; set; } = new();
+    public WatchFolderOptions WatchFolder { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -66,6 +67,15 @@ public sealed class YtDlpOptions
     /// <summary>SOCKS proxy; falls back to the TG_PROXY env var when empty.</summary>
     public string Proxy { get; set; } = "";
     public int TimeoutSeconds { get; set; } = 600;
+}
+
+public sealed class WatchFolderOptions
+{
+    /// <summary>Inbox directory — new media files here become jobs. Empty = disabled.</summary>
+    public string Dir { get; set; } = "";
+    public int PollSeconds { get; set; } = 30;
+    /// <summary>Subdir under Dir processed files move into (empty = leave in place).</summary>
+    public string DoneDir { get; set; } = "done";
 }
 
 public sealed class SummaryOptions
