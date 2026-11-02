@@ -71,7 +71,7 @@ public sealed class WatchFolderWorker(
                 using var scope = services.CreateScope();
                 var jobService = scope.ServiceProvider.GetRequiredService<IJobService>();
                 var job = await jobService.CreateJobAsync(Path.GetFileName(file), stream,
-                    MediaTypes.For(Path.GetFileName(file)), null, ct);
+                    MediaTypes.For(Path.GetFileName(file)), null, null, ct);
                 logger.LogInformation("WatchFolder ingested {File} -> job {JobId}", file, job.Id);
             }
             catch (Exception ex)

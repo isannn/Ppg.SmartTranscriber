@@ -79,7 +79,8 @@ public sealed class TranscriptionPipeline(
                 new TranscribeOptions(
                     job.Model ?? stt.DefaultModel,
                     job.Language ?? stt.DefaultLanguage,
-                    job.Diarize),
+                    job.Diarize,
+                    job.Hotwords),
                 ct, reporter);
 
             job.Progress = 90;

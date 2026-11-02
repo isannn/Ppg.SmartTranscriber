@@ -1,0 +1,5 @@
+- [x] spec
+- [ ] migration 0009 hotwords + entity + repo
+- [ ] TranscribeOptions.Hotwords → SidecarTranscriber query param → stt_svc main.py
+- [ ] create/url/retranscribe accept hotwords; CLI --hotwords
+- [ ] build, MR, merge

@@ -13,4 +13,5 @@ public interface ITranscriber
 public sealed record TranscribeOptions(
     string? Model = null,
     string? Language = null,
-    bool Diarize = true);
+    bool Diarize = true,
+    string? Hotwords = null);
