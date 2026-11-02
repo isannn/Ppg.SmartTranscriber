@@ -12,6 +12,7 @@ public sealed class JobService(
     IStorageService storage,
     IJobQueue queue,
     IServiceProvider services,
+    IWebhookNotifier webhooks,
     ILogger<JobService> logger) : IJobService
 {
     public async Task<JobDto> CreateJobAsync(string fileName, Stream content, string contentType, CancellationToken ct = default)
@@ -135,7 +136,9 @@ public sealed class JobService(
                 {
                     job.Status = JobStatus.Failed;
                     job.ErrorMessage = $"url ingest: {ex.Message}";
+                    job.CompletedAt = DateTime.UtcNow;
                     await repo.UpdateAsync(job);
+                    await webhooks.NotifyJobFinishedAsync(job);
                 }
             }
             catch (Exception inner)

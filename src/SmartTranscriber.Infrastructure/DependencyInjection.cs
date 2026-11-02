@@ -11,6 +11,7 @@ using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
 using SmartTranscriber.Infrastructure.Media;
 using SmartTranscriber.Infrastructure.Persistence;
+using SmartTranscriber.Infrastructure.Webhooks;
 using SmartTranscriber.Infrastructure.Storage;
 using SmartTranscriber.Infrastructure.Stt;
 using SmartTranscriber.Infrastructure.Transcription;
@@ -95,7 +96,6 @@ public static class DependencyInjection
         });
 
         services.AddSingleton<ITranscriber, SidecarTranscriber>();
-        services.AddSingleton<ITranscriber, WhisperCppTranscriber>();
         services.AddHttpClient<AcpSummarizer>((sp, client) =>
         {
             var opts = sp.GetRequiredService<IOptions<SmartTranscriberOptions>>().Value;
@@ -109,7 +109,11 @@ public static class DependencyInjection
         services.AddTransient<ISummarizer>(sp => sp.GetRequiredService<AcpSummarizer>());
         services.AddTransient<ISummarizer>(sp => sp.GetRequiredService<OpenAiSummarizer>());
         services.AddSingleton<SummarizerChain>();
+        services.AddSingleton<ExportService>();
         services.AddSingleton<IMediaFetcher, YtDlpMediaFetcher>();
+        services.AddSingleton<IKeyFrameExtractor, FfmpegKeyFrameExtractor>();
+        services.AddScoped<IFrameRepository, MediaFrameRepository>();
+        services.AddHttpClient<IWebhookNotifier, HttpWebhookNotifier>();
         services.AddSingleton<TranscriberChain>();
         return services;
     }

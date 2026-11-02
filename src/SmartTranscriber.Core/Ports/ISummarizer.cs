@@ -3,7 +3,7 @@ namespace SmartTranscriber.Core.Ports;
 public interface ISummarizer
 {
     string Name { get; }
-    Task<string> SummarizeAsync(string transcriptText, CancellationToken ct = default);
+    Task<string> SummarizeAsync(string transcriptText, Dto.SummaryRequest? request, CancellationToken ct = default);
 }
 
 /// <summary>Optional availability probe — providers without it are always tried.</summary>

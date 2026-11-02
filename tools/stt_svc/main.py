@@ -21,10 +21,18 @@ app = FastAPI(title="stt-svc", version="1.0.0")
 
 MEDIA_EXTENSIONS = core.MEDIA_EXTENSIONS
 
+# in-flight job progress: job_id -> {"frac": float, "stage": str}
+_PROGRESS: dict[str, dict] = {}
+
 
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": "stt-svc", "default_model": core.DEFAULT_MODEL}
+
+
+@app.get("/progress/{job_id}")
+def progress(job_id: str) -> dict:
+    return _PROGRESS.get(job_id, {"frac": None, "stage": "unknown"})
 
 
 @app.post("/transcribe")
@@ -34,6 +42,7 @@ async def transcribe(
     language: str = Query("", description="Language code, e.g. ru/en"),
     diarize: bool = Query(True),
     num_speakers: int | None = Query(None),
+    job_id: str = Query("", description="optional progress key — poll GET /progress/{job_id}"),
 ) -> dict:
     filename = file.filename or "media.bin"
     ext = os.path.splitext(filename)[1].lower()
@@ -50,11 +59,19 @@ async def transcribe(
         except Exception as e:
             raise HTTPException(422, f"audio extraction failed: {e}") from e
 
-        words, meta = core.transcribe_words(
-            wav_path,
-            model_size=model or core.DEFAULT_MODEL,
-            language=language or None,
-        )
+        if job_id:
+            _PROGRESS[job_id] = {"frac": 0.0, "stage": "transcribing"}
+        try:
+            words, meta = core.transcribe_words(
+                wav_path,
+                model_size=model or core.DEFAULT_MODEL,
+                language=language or None,
+                progress=lambda f: _PROGRESS.update(
+                    {job_id: {"frac": f, "stage": "transcribing"}}) if job_id else None,
+            )
+        finally:
+            if job_id:
+                _PROGRESS.pop(job_id, None)
 
         turns: list[tuple[float, float, str]] = []
         if diarize:

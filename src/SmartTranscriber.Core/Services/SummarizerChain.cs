@@ -13,7 +13,7 @@ public sealed class SummarizerChain(IEnumerable<ISummarizer> summarizers, ILogge
 {
     public string Name => "chain";
 
-    public async Task<string> SummarizeAsync(string transcriptText, CancellationToken ct = default)
+    public async Task<string> SummarizeAsync(string transcriptText, Dto.SummaryRequest? request, CancellationToken ct = default)
     {
         var errors = new List<string>();
         foreach (var s in summarizers)
@@ -26,7 +26,7 @@ public sealed class SummarizerChain(IEnumerable<ISummarizer> summarizers, ILogge
             }
             try
             {
-                return await s.SummarizeAsync(transcriptText, ct);
+                return await s.SummarizeAsync(transcriptText, request, ct);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)

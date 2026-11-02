@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 
 using SmartTranscriber.Core.Domain;
+using SmartTranscriber.Core.Dto;
 using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
 
@@ -65,19 +66,19 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     [HttpGet("{id:guid}/summary")]
     public async Task<IActionResult> GetSummary(Guid id, CancellationToken ct)
     {
-        var result = await transcripts.GetOrCreateSummaryAsync(id, regenerate: false, ct);
+        var result = await transcripts.GetOrCreateSummaryAsync(id, regenerate: false, ct: ct);
         return result is null
             ? NotFound()
             : Ok(new { summary = result.Value.Summary, cached = result.Value.Cached });
     }
 
     [HttpPost("{id:guid}/summary")]
-    public async Task<IActionResult> CreateSummary(Guid id, CancellationToken ct)
+    public async Task<IActionResult> CreateSummary(Guid id, [FromBody] SummaryRequest? request, CancellationToken ct)
     {
-        var result = await transcripts.GetOrCreateSummaryAsync(id, regenerate: true, ct);
+        var result = await transcripts.GetOrCreateSummaryAsync(id, request?.Regenerate ?? false, request, ct);
         return result is null
             ? NotFound()
-            : Ok(new { summary = result.Value.Summary, cached = false });
+            : Ok(new { summary = result.Value.Summary, cached = result.Value.Cached });
     }
 
     /// <summary>
@@ -106,7 +107,19 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
             return BadRequest(new { error = "from and to required" });
         }
         var updated = await transcripts.RenameSpeakerAsync(id, request.From, request.To, ct);
-        return updated is null ? NotFound() : Ok(new { updated });
+        return Ok(new { updated });
+    }
+
+    /// <summary>Merge one speaker label into another (diarization split).</summary>
+    [HttpPost("{id:guid}/speakers/merge")]
+    public async Task<IActionResult> MergeSpeaker(Guid id, [FromBody] RenameRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.From) || string.IsNullOrWhiteSpace(request.To))
+        {
+            return BadRequest(new { error = "from/to required" });
+        }
+        var merged = await transcripts.RenameSpeakerAsync(id, request.From, request.To, ct);
+        return Ok(new { merged });
     }
 
     public sealed record RenameRequest(string From, string To);
@@ -123,6 +136,33 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
             return NotFound();
         }
         return File(media.Value.Stream, MediaTypes.For(media.Value.ObjectName), enableRangeProcessing: true);
+    }
+
+    /// <summary>List extracted key frames for a video job.</summary>
+    [HttpGet("{id:guid}/frames")]
+    public async Task<IActionResult> ListFrames(Guid id, [FromServices] IFrameRepository frames, CancellationToken ct)
+    {
+        var rows = await frames.GetByJobAsync(id, ct);
+        return Ok(rows.Select(f => new
+        {
+            f.FrameNo,
+            f.TimeSeconds,
+            url = $"frames/{f.FrameNo}"
+        }));
+    }
+
+    /// <summary>Stream one key frame (image/jpeg).</summary>
+    [HttpGet("{id:guid}/frames/{no:int}")]
+    public async Task<IActionResult> GetFrame(Guid id, int no,
+        [FromServices] IFrameRepository frames, [FromServices] IStorageService storage, CancellationToken ct)
+    {
+        var frame = await frames.GetAsync(id, no, ct);
+        if (frame is null)
+        {
+            return NotFound();
+        }
+        var stream = await storage.DownloadAsync(frame.ObjectName, ct);
+        return File(stream, "image/jpeg");
     }
 
     /// <summary>

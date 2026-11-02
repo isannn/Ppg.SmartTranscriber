@@ -55,16 +55,20 @@ public static class Program
 
             Usage:
               smarttranscriber transcribe <file> [-o out.txt] [--model M] [--language L] [--no-diarize]
-                  Transcribe a media file standalone (stt sidecar, whisper.cpp fallback).
+                  Transcribe a media file standalone (stt sidecar).
               smarttranscriber api upload <file> [file...] | api upload --dir <path>
               smarttranscriber api jobs [--status Pending|Processing|Done|Failed] [--limit N]
               smarttranscriber api job <id>
               smarttranscriber api transcript <id> [-o file.txt] [--format txt|json]
               smarttranscriber api search <query> [--limit N]
-              smarttranscriber api summarize <id>
+              smarttranscriber api summarize <id> [--model M] [--prompt P] [--regenerate]
               smarttranscriber api url <media-url>
               smarttranscriber api rename <id> <from> <to>
+              smarttranscriber api merge <id> <from> <to>
+              smarttranscriber api segment-text <id> <text>
+              smarttranscriber api export [-o file]
               smarttranscriber api retry <id>
+              smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
               smarttranscriber db migrate
                   Apply pending DbUp migrations.
@@ -157,6 +161,11 @@ file static class ApiCommand
         var baseUrl = config.GetSection(SmartTranscriberOptions.SectionName)["Api:BaseUrl"]
                       ?? "http://127.0.0.1:8460";
         using var http = new HttpClient { BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/") };
+        var apiToken = Environment.GetEnvironmentVariable("SMARTTRANSCRIBER_API_TOKEN");
+        if (!string.IsNullOrEmpty(apiToken))
+        {
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiToken);
+        }
 
         return args[0] switch
         {
@@ -169,6 +178,10 @@ file static class ApiCommand
             "url" => await UrlAsync(http, args[1..]),
             "rename" => await RenameAsync(http, args[1..]),
             "retry" => await RetryAsync(http, args[1..]),
+            "frames" => await FramesAsync(http, args[1..]),
+            "merge" => await MergeAsync(http, args[1..]),
+            "segment-text" => await SegmentTextAsync(http, args[1..]),
+            "export" => await ExportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
     }
@@ -328,7 +341,13 @@ file static class ApiCommand
             Console.Error.WriteLine("usage: api summarize <id>");
             return 2;
         }
-        var response = await http.PostAsync($"api/v1/jobs/{id}/summary", null);
+        var body = new
+        {
+            model = TranscribeCommand.OptValue(args, "--model"),
+            prompt = TranscribeCommand.OptValue(args, "--prompt"),
+            regenerate = args.Contains("--regenerate")
+        };
+        var response = await http.PostAsJsonAsync($"api/v1/jobs/{id}/summary", body);
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }
@@ -342,7 +361,71 @@ file static class ApiCommand
             return 2;
         }
         var limit = TranscribeCommand.OptValue(args, "--limit") ?? "50";
-        Console.WriteLine(await http.GetStringAsync($"api/v1/search?q={Uri.EscapeDataString(query)}&limit={limit}"));
+        var url = $"api/v1/search?q={Uri.EscapeDataString(query)}&limit={limit}";
+        foreach (var flag in new[] { "job", "speaker", "from", "to", "model" })
+        {
+            var v = TranscribeCommand.OptValue(args, $"--{flag}");
+            if (v is not null)
+            {
+                url += $"&{(flag == "job" ? "jobId" : flag)}={Uri.EscapeDataString(v)}";
+            }
+        }
+        Console.WriteLine(await http.GetStringAsync(url));
+        return 0;
+    }
+
+    private static async Task<int> MergeAsync(HttpClient http, string[] args)
+    {
+        var pos = args.Where(a => !a.StartsWith('-')).ToArray();
+        if (pos.Length < 3)
+        {
+            Console.Error.WriteLine("usage: api merge <id> <from> <to>");
+            return 2;
+        }
+        var response = await http.PostAsJsonAsync(
+            $"api/v1/jobs/{pos[0]}/speakers/merge", new { from = pos[1], to = pos[2] });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> SegmentTextAsync(HttpClient http, string[] args)
+    {
+        var pos = args.Where(a => !a.StartsWith('-')).ToArray();
+        if (pos.Length < 2)
+        {
+            Console.Error.WriteLine("usage: api segment-text <id> <text>");
+            return 2;
+        }
+        var response = await http.PutAsJsonAsync(
+            $"api/v1/segments/{pos[0]}/text", new { text = string.Join(' ', pos[1..]) });
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> ExportAsync(HttpClient http, string[] args)
+    {
+        var outFile = TranscribeCommand.OptValue(args, "-o");
+        var json = await http.GetByteArrayAsync("api/v1/export");
+        if (outFile is not null)
+        {
+            await File.WriteAllBytesAsync(outFile, json);
+            Console.WriteLine(outFile);
+        }
+        else
+        {
+            Console.WriteLine(System.Text.Encoding.UTF8.GetString(json));
+        }
+        return 0;
+    }
+
+    private static async Task<int> FramesAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => !a.StartsWith('-'));
+        if (id is null)
+        {
+            Console.Error.WriteLine("usage: api frames <id>");
+            return 2;
+        }
+        Console.WriteLine(await http.GetStringAsync($"api/v1/jobs/{id}/frames"));
         return 0;
     }
 }

@@ -25,12 +25,22 @@ public sealed record SegmentDto(
     string Text);
 
 public sealed record SpeakerUpdateRequest(string? Speaker);
+public sealed record TextUpdateRequest(string Text);
 
 public sealed record TranscriptResult(
     IReadOnlyList<TranscriptSegment> Segments,
     string? Model,
     double? DurationSeconds,
     string? Language);
+
+public sealed record SummaryRequest(string? Model = null, string? Prompt = null, bool Regenerate = false);
+
+public sealed record SearchFilters(
+    Guid? JobId = null,
+    string? Speaker = null,
+    DateTime? From = null,
+    DateTime? To = null,
+    string? Model = null);
 
 public sealed record SearchHitDto(
     long SegmentId,

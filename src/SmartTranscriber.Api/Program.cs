@@ -1,4 +1,7 @@
+using Microsoft.Extensions.Options;
+
 using SmartTranscriber.Api.Components;
+using SmartTranscriber.Core.Options;
 using SmartTranscriber.Infrastructure;
 using SmartTranscriber.Infrastructure.Persistence;
 
@@ -38,6 +41,31 @@ app.UseSwaggerUI(c =>
 
 app.UseStaticFiles();
 app.UseAntiforgery();
+
+// bearer auth on /api/v1/* — /health stays open; media accepts ?token=
+// because <audio>/<video> tags can't send Authorization headers.
+app.Use(async (ctx, next) =>
+{
+    var expected = ctx.RequestServices
+        .GetRequiredService<IOptions<SmartTranscriberOptions>>().Value.Auth.Token;
+    if (!string.IsNullOrEmpty(expected)
+        && ctx.Request.Path.StartsWithSegments("/api/v1")
+        && !ctx.Request.Path.StartsWithSegments("/api/v1/health"))
+    {
+        var bearer = ctx.Request.Headers.Authorization.ToString();
+        var token = bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? bearer[7..].Trim()
+            : ctx.Request.Query["token"].ToString();
+        if (token != expected)
+        {
+            ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await ctx.Response.WriteAsJsonAsync(new { error = "unauthorized" });
+            return;
+        }
+    }
+    await next();
+});
+
 app.MapControllers();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
