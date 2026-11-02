@@ -70,6 +70,8 @@ public static class Program
               smarttranscriber api retranscribe <id> [--model M] [--language L] [--no-diarize]
               smarttranscriber api bulk delete|retry <id...>
               smarttranscriber api stats
+              smarttranscriber api tag <id> <tag1,tag2>
+              smarttranscriber api jobs [--tag X]
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -187,6 +189,7 @@ file static class ApiCommand
             "retranscribe" => await RetranscribeAsync(http, args[1..]),
             "bulk" => await BulkAsync(http, args[1..]),
             "stats" => await SimpleGetAsync(http, "api/v1/stats"),
+            "tag" => await TagAsync(http, args[1..]),
             "export" => await ExportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
@@ -271,8 +274,10 @@ file static class ApiCommand
     private static async Task<int> JobsAsync(HttpClient http, string[] args)
     {
         var status = TranscribeCommand.OptValue(args, "--status");
+        var tag = TranscribeCommand.OptValue(args, "--tag");
         var limit = TranscribeCommand.OptValue(args, "--limit") ?? "50";
-        var url = $"api/v1/jobs?limit={limit}" + (status is null ? "" : $"&status={status}");
+        var url = $"api/v1/jobs?limit={limit}" + (status is null ? "" : $"&status={status}")
+                  + (tag is null ? "" : $"&tag={Uri.EscapeDataString(tag)}");
         Console.WriteLine(await http.GetStringAsync(url));
         return 0;
     }
@@ -458,6 +463,20 @@ file static class ApiCommand
             return 2;
         }
         var response = await http.PostAsJsonAsync("api/v1/jobs/bulk", new { action, ids });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> TagAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => Guid.TryParse(a, out _));
+        var tags = args.LastOrDefault(a => !a.StartsWith('-') && a != id);
+        if (id is null || tags is null)
+        {
+            Console.Error.WriteLine("usage: api tag <id> <tag1,tag2>");
+            return 2;
+        }
+        var response = await http.PutAsJsonAsync($"api/v1/jobs/{id}/tags", new { tags });
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }

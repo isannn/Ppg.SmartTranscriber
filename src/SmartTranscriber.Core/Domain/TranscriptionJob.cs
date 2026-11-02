@@ -22,6 +22,8 @@ public class TranscriptionJob
     public string? Hotwords { get; set; }
     /// <summary>Queue priority — higher is claimed first (0 default).</summary>
     public int Priority { get; set; }
+    /// <summary>Comma-separated tags for categorization/filtering.</summary>
+    public string? Tags { get; set; }
     public int SegmentCount { get; set; }
 
     public List<TranscriptSegment> Segments { get; set; } = new();

@@ -84,6 +84,6 @@ else
 
     private async Task LoadAsync()
     {
-        _jobs = await JobService.ListJobsAsync(null, 100, 0);
+        _jobs = await JobService.ListJobsAsync(null, null, 100, 0);
     }
 }
