@@ -14,7 +14,7 @@ public sealed class ExportService(
 {
     public async Task<ExportDump> DumpAsync(CancellationToken ct = default)
     {
-        var allJobs = await jobs.ListAsync(null, int.MaxValue, 0, ct);
+        var allJobs = await jobs.ListAsync(null, null, int.MaxValue, 0, ct);
         var allSegments = new List<TranscriptSegment>();
         var allFrames = new List<MediaFrame>();
         foreach (var job in allJobs)
