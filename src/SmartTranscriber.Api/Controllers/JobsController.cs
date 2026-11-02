@@ -15,12 +15,13 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     [HttpGet]
     public async Task<IActionResult> List(
         [FromQuery] string? status,
+        [FromQuery] string? tag,
         [FromQuery] int limit = 50,
         [FromQuery] int offset = 0,
         CancellationToken ct = default)
     {
         JobStatus? parsed = status is null ? null : Enum.Parse<JobStatus>(status, ignoreCase: true);
-        var list = await jobs.ListJobsAsync(parsed, Math.Clamp(limit, 1, 500), Math.Max(0, offset), ct);
+        var list = await jobs.ListJobsAsync(parsed, tag, Math.Clamp(limit, 1, 500), Math.Max(0, offset), ct);
         return Ok(list);
     }
 
@@ -120,6 +121,15 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     }
 
     public sealed record RetranscribeRequest(string? Model = null, string? Language = null, bool? Diarize = null, string? Hotwords = null);
+
+    /// <summary>Replace the comma-separated tag list on a job.</summary>
+    [HttpPut("{id:guid}/tags")]
+    public async Task<IActionResult> UpdateTags(Guid id, [FromBody] TagsRequest request, CancellationToken ct)
+    {
+        return await jobs.UpdateTagsAsync(id, request?.Tags ?? "", ct) ? Ok(new { updated = true }) : NotFound();
+    }
+
+    public sealed record TagsRequest(string Tags);
 
     /// <summary>Aggregate stats for dashboards.</summary>
     [HttpGet("/api/v1/stats")]

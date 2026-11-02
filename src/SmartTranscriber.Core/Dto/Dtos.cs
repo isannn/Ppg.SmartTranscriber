@@ -17,7 +17,8 @@ public sealed record JobDto(
     int Progress,
     int SegmentCount,
     string? CallbackUrl = null,
-    int Priority = 0);
+    int Priority = 0,
+    string? Tags = null);
 
 public sealed record SegmentDto(
     long Id,

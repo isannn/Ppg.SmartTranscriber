@@ -47,10 +47,23 @@ public sealed class JobService(
         return job is null ? null : Map(job);
     }
 
-    public async Task<IReadOnlyList<JobDto>> ListJobsAsync(JobStatus? status, int limit, int offset, CancellationToken ct = default)
+    public async Task<IReadOnlyList<JobDto>> ListJobsAsync(JobStatus? status, string? tag, int limit, int offset, CancellationToken ct = default)
     {
-        var list = await jobs.ListAsync(status, limit, offset, ct);
+        var list = await jobs.ListAsync(status, tag, limit, offset, ct);
         return list.Select(Map).ToList();
+    }
+
+    /// <summary>Replace the comma-separated tag list on a job.</summary>
+    public async Task<bool> UpdateTagsAsync(Guid id, string tags, CancellationToken ct = default)
+    {
+        var job = await jobs.GetByIdAsync(id, ct);
+        if (job is null)
+        {
+            return false;
+        }
+        job.Tags = string.IsNullOrWhiteSpace(tags) ? null : tags.Trim().Trim(',');
+        await jobs.UpdateAsync(job, ct);
+        return true;
     }
 
     public async Task<bool> DeleteJobAsync(Guid id, bool deleteFile, CancellationToken ct = default)
@@ -260,5 +273,5 @@ public sealed class JobService(
         j.Id, j.ObjectName, j.OriginalFileName, j.Status.ToString(),
         j.CreatedAt, j.CompletedAt, j.ErrorMessage, j.Model, j.Language,
         j.DurationSeconds, j.Summary, j.Progress, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count,
-        j.CallbackUrl, j.Priority);
+        j.CallbackUrl, j.Priority, j.Tags);
 }
