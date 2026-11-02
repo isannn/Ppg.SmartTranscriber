@@ -68,6 +68,7 @@ public static class Program
               smarttranscriber api segment-text <id> <text>
               smarttranscriber api export [-o file]
               smarttranscriber api retranscribe <id> [--model M] [--language L] [--no-diarize]
+              smarttranscriber api bulk delete|retry <id...>
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -183,6 +184,7 @@ file static class ApiCommand
             "merge" => await MergeAsync(http, args[1..]),
             "segment-text" => await SegmentTextAsync(http, args[1..]),
             "retranscribe" => await RetranscribeAsync(http, args[1..]),
+            "bulk" => await BulkAsync(http, args[1..]),
             "export" => await ExportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
@@ -429,6 +431,20 @@ file static class ApiCommand
             diarize = args.Contains("--no-diarize") ? (bool?)false : null,
             hotwords = TranscribeCommand.OptValue(args, "--hotwords")
         });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> BulkAsync(HttpClient http, string[] args)
+    {
+        var action = args.FirstOrDefault(a => a is "delete" or "retry");
+        var ids = args.Where(a => Guid.TryParse(a, out _)).ToList();
+        if (action is null || ids.Count == 0)
+        {
+            Console.Error.WriteLine("usage: api bulk delete|retry <id...>");
+            return 2;
+        }
+        var response = await http.PostAsJsonAsync("api/v1/jobs/bulk", new { action, ids });
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }

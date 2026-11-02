@@ -15,4 +15,5 @@ public interface IJobService
     /// <summary>Requeues a Failed job. Null = not found, false = not Failed.</summary>
     Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default);
     Task<JobDto?> RetranscribeAsync(Guid id, string? model, string? language, bool? diarize, string? hotwords = null, CancellationToken ct = default);
+    Task<IReadOnlyList<(Guid Id, bool Ok, string Detail)>> BulkAsync(string action, IReadOnlyList<Guid> ids, CancellationToken ct = default);
 }

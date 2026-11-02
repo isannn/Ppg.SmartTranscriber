@@ -121,6 +121,20 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
 
     public sealed record RetranscribeRequest(string? Model = null, string? Language = null, bool? Diarize = null, string? Hotwords = null);
 
+    /// <summary>Bulk op over job ids: {action:"delete"|"retry", ids:[...]}.</summary>
+    [HttpPost("bulk")]
+    public async Task<IActionResult> Bulk([FromBody] BulkRequest request, CancellationToken ct)
+    {
+        if (request?.Ids is not { Count: > 0 } || string.IsNullOrWhiteSpace(request.Action))
+        {
+            return BadRequest(new { error = "action + ids required" });
+        }
+        var results = await jobs.BulkAsync(request.Action, request.Ids, ct);
+        return Ok(new { results = results.Select(r => new { id = r.Id, ok = r.Ok, detail = r.Detail }) });
+    }
+
+    public sealed record BulkRequest(string Action, List<Guid> Ids);
+
     /// <summary>Merge one speaker label into another (diarization split).</summary>
     [HttpPost("{id:guid}/speakers/merge")]
     public async Task<IActionResult> MergeSpeaker(Guid id, [FromBody] RenameRequest request, CancellationToken ct)
