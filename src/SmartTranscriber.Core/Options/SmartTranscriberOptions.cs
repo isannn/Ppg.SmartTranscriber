@@ -22,6 +22,7 @@ public sealed class SmartTranscriberOptions
     public KeyFrameOptions KeyFrames { get; set; } = new();
     public SummaryOptions Summary { get; set; } = new();
     public WatchFolderOptions WatchFolder { get; set; } = new();
+    public RetentionOptions Retention { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -67,6 +68,13 @@ public sealed class YtDlpOptions
     /// <summary>SOCKS proxy; falls back to the TG_PROXY env var when empty.</summary>
     public string Proxy { get; set; } = "";
     public int TimeoutSeconds { get; set; } = 600;
+}
+
+public sealed class RetentionOptions
+{
+    /// <summary>Delete Done/Failed jobs older than this. 0 = disabled.</summary>
+    public int MaxAgeDays { get; set; } = 0;
+    public int SweepMinutes { get; set; } = 60;
 }
 
 public sealed class WatchFolderOptions

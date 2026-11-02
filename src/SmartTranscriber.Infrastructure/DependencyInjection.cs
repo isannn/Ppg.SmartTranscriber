@@ -81,6 +81,7 @@ public static class DependencyInjection
         services.AddScoped<TranscriptionPipeline>();
         services.AddHostedService<TranscriptionWorker>();
         services.AddHostedService<WatchFolderWorker>();
+        services.AddHostedService<RetentionWorker>();
 
         return services;
     }
