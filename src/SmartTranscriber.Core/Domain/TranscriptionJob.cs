@@ -16,6 +16,8 @@ public class TranscriptionJob
     public int Progress { get; set; }
     /// <summary>Per-job webhook target — notified on Done/Failed in addition to global endpoints.</summary>
     public string? CallbackUrl { get; set; }
+    /// <summary>Run diarization for this job (retranscribe knob).</summary>
+    public bool Diarize { get; set; } = true;
     public int SegmentCount { get; set; }
 
     public List<TranscriptSegment> Segments { get; set; } = new();

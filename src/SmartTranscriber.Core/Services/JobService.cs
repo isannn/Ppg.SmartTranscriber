@@ -12,6 +12,7 @@ public sealed class JobService(
     IStorageService storage,
     IJobQueue queue,
     IServiceProvider services,
+    ISegmentRepository segments,
     IWebhookNotifier webhooks,
     ILogger<JobService> logger) : IJobService
 {
@@ -159,6 +160,29 @@ public sealed class JobService(
         }
         var stream = await storage.DownloadAsync(job.ObjectName, ct);
         return (stream, job.ObjectName);
+    }
+
+    /// <summary>Reset the job to Pending with new ASR params and re-enqueue.</summary>
+    public async Task<JobDto?> RetranscribeAsync(Guid id, string? model, string? language, bool? diarize, CancellationToken ct = default)
+    {
+        var job = await jobs.GetByIdAsync(id, ct);
+        if (job is null)
+        {
+            return null;
+        }
+        await segments.DeleteByJobAsync(id, ct);
+        job.Model = model;
+        job.Language = language;
+        job.Diarize = diarize ?? true;
+        job.Status = JobStatus.Pending;
+        job.Progress = 0;
+        job.ErrorMessage = null;
+        job.Summary = null;
+        job.CompletedAt = null;
+        job.DurationSeconds = null;
+        await jobs.UpdateAsync(job, ct);
+        await queue.EnqueueAsync(job.Id, ct);
+        return Map(job);
     }
 
     public async Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default)
