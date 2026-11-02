@@ -66,6 +66,7 @@ public static class Program
               smarttranscriber api rename <id> <from> <to>
               smarttranscriber api merge <id> <from> <to>
               smarttranscriber api segment-text <id> <text>
+              smarttranscriber api export [-o file]
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -180,6 +181,7 @@ file static class ApiCommand
             "frames" => await FramesAsync(http, args[1..]),
             "merge" => await MergeAsync(http, args[1..]),
             "segment-text" => await SegmentTextAsync(http, args[1..]),
+            "export" => await ExportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
     }
@@ -397,6 +399,22 @@ file static class ApiCommand
         var response = await http.PutAsJsonAsync(
             $"api/v1/segments/{pos[0]}/text", new { text = string.Join(' ', pos[1..]) });
         return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> ExportAsync(HttpClient http, string[] args)
+    {
+        var outFile = TranscribeCommand.OptValue(args, "-o");
+        var json = await http.GetByteArrayAsync("api/v1/export");
+        if (outFile is not null)
+        {
+            await File.WriteAllBytesAsync(outFile, json);
+            Console.WriteLine(outFile);
+        }
+        else
+        {
+            Console.WriteLine(System.Text.Encoding.UTF8.GetString(json));
+        }
+        return 0;
     }
 
     private static async Task<int> FramesAsync(HttpClient http, string[] args)
