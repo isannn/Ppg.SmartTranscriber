@@ -72,14 +72,28 @@ public sealed class SegmentRepository(NpgsqlDataSource dataSource) : ISegmentRep
 
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         var rows = await conn.QueryAsync<SearchHitDto>(
-            "SELECT s.id AS SegmentId, s.job_id AS JobId, j.original_file_name AS OriginalFileName, " +
+            "SELECT * FROM (" +
+            "SELECT 'segment' AS Type, s.id AS SegmentId, s.job_id AS JobId, j.original_file_name AS OriginalFileName, " +
             "s.start_time AS StartTime, s.end_time AS EndTime, s.speaker AS Speaker, " +
-            "ts_headline('russian', s.text, plainto_tsquery('russian', @query)) AS Snippet " +
+            "ts_headline('russian', s.text, plainto_tsquery('russian', @query)) AS Snippet, " +
+            "ts_rank(s.text_vector, plainto_tsquery('russian', @query)) AS Rank " +
             "FROM transcript_segments s " +
             "JOIN transcription_jobs j ON j.id = s.job_id " +
             where +
-            "ORDER BY ts_rank(s.text_vector, plainto_tsquery('russian', @query)) DESC " +
-            "LIMIT @limit",
+            "UNION ALL " +
+            "SELECT 'frame', f.id, f.job_id, j.original_file_name, " +
+            "f.time_seconds, f.time_seconds, NULL, " +
+            "ts_headline('russian', f.ocr_text, plainto_tsquery('russian', @query)), " +
+            "ts_rank(f.ocr_vector, plainto_tsquery('russian', @query)) " +
+            "FROM media_frames f " +
+            "JOIN transcription_jobs j ON j.id = f.job_id " +
+            "WHERE f.ocr_vector @@ plainto_tsquery('russian', @query) " +
+            (jobId is not null ? "AND f.job_id = @jobId " : "") +
+            (from is not null ? "AND j.created_at >= @from " : "") +
+            (to is not null ? "AND j.created_at < @to " : "") +
+            (!string.IsNullOrWhiteSpace(filters?.Model) ? "AND j.model = @model " : "") +
+            (!string.IsNullOrWhiteSpace(filters?.Speaker) ? "AND FALSE " : "") +
+            ") hits ORDER BY Rank DESC LIMIT @limit",
             new
             {
                 query,

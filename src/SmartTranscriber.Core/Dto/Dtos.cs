@@ -44,6 +44,7 @@ public sealed record SearchFilters(
     string? Model = null);
 
 public sealed record SearchHitDto(
+    string Type,
     long SegmentId,
     Guid JobId,
     string OriginalFileName,

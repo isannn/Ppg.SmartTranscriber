@@ -22,6 +22,7 @@ public sealed class TranscriptionPipeline(
     IKeyFrameExtractor keyframes,
     IFrameRepository frames,
     SummarizerChain summarizer,
+    IOcr ocr,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
 {
@@ -165,6 +166,19 @@ public sealed class TranscriptionPipeline(
             }
             await frames.InsertBatchAsync(rows, ct);
             logger.LogInformation("Job {JobId}: {Count} key frames extracted", job.Id, rows.Count);
+
+            // OCR each frame into ocr_text — feeds the FTS index (screen-content search)
+            if (await ocr.IsAvailableAsync(ct))
+            {
+                foreach (var (no, _, file) in extracted)
+                {
+                    var text = await ocr.OcrAsync(file, ct);
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        await frames.UpdateOcrAsync(job.Id, no, text, ct);
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {

@@ -10,6 +10,7 @@ using SmartTranscriber.Core.Options;
 using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
 using SmartTranscriber.Infrastructure.Media;
+using SmartTranscriber.Infrastructure.Ocr;
 using SmartTranscriber.Infrastructure.Persistence;
 using SmartTranscriber.Infrastructure.Webhooks;
 using SmartTranscriber.Infrastructure.Storage;
@@ -113,6 +114,7 @@ public static class DependencyInjection
         services.AddSingleton<ExportService>();
         services.AddSingleton<IMediaFetcher, YtDlpMediaFetcher>();
         services.AddSingleton<IKeyFrameExtractor, FfmpegKeyFrameExtractor>();
+        services.AddSingleton<IOcr, TesseractOcr>();
         services.AddScoped<IFrameRepository, MediaFrameRepository>();
         services.AddHttpClient<IWebhookNotifier, HttpWebhookNotifier>();
         services.AddSingleton<TranscriberChain>();
