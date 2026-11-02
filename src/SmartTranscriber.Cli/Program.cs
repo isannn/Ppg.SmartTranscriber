@@ -73,6 +73,7 @@ public static class Program
               smarttranscriber api stats
               smarttranscriber api tag <id> <tag1,tag2>
               smarttranscriber api jobs [--tag X]
+              smarttranscriber api compare <idA> <idB>
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -191,6 +192,7 @@ file static class ApiCommand
             "bulk" => await BulkAsync(http, args[1..]),
             "stats" => await SimpleGetAsync(http, "api/v1/stats"),
             "tag" => await TagAsync(http, args[1..]),
+            "compare" => await CompareAsync(http, args[1..]),
             "export" => await ExportAsync(http, args[1..]),
             "import" => await ImportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
@@ -494,6 +496,19 @@ file static class ApiCommand
         var json = await File.ReadAllTextAsync(file);
         var response = await http.PostAsync("api/v1/import",
             new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> CompareAsync(HttpClient http, string[] args)
+    {
+        var ids = args.Where(a => Guid.TryParse(a, out _)).ToList();
+        if (ids.Count < 2)
+        {
+            Console.Error.WriteLine("usage: api compare <idA> <idB>");
+            return 2;
+        }
+        var response = await http.GetAsync($"api/v1/jobs/compare?a={ids[0]}&b={ids[1]}");
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }

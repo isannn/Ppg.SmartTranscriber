@@ -54,6 +54,9 @@ public sealed record JobStatsDto(
 public sealed record JobStatsModel(string? Model, int Jobs, double AvgDurationSeconds);
 public sealed record JobStatsDay(string Date, int Jobs);
 
+public sealed record CompareRow(int Index, double AStart, double BStart, string AText, string BText, bool Same);
+public sealed record CompareDto(JobDto JobA, JobDto JobB, IReadOnlyList<CompareRow> Rows);
+
 public sealed record SearchHitDto(
     string Type,
     long SegmentId,

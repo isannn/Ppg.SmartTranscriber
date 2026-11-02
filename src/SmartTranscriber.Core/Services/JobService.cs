@@ -243,6 +243,28 @@ public sealed class JobService(
 
     public Task<JobStatsDto> GetStatsAsync(CancellationToken ct = default) => jobs.GetStatsAsync(ct);
 
+    /// <summary>Positional diff of two jobs' transcripts — same-media retranscribe comparison.</summary>
+    public async Task<CompareDto?> CompareAsync(Guid a, Guid b, CancellationToken ct = default)
+    {
+        var jobA = await jobs.GetByIdAsync(a, ct);
+        var jobB = await jobs.GetByIdAsync(b, ct);
+        if (jobA is null || jobB is null)
+        {
+            return null;
+        }
+        var rows = new List<CompareRow>();
+        var count = Math.Max(jobA.Segments.Count, jobB.Segments.Count);
+        for (var i = 0; i < count; i++)
+        {
+            var sa = i < jobA.Segments.Count ? jobA.Segments[i] : null;
+            var sb = i < jobB.Segments.Count ? jobB.Segments[i] : null;
+            var aText = sa?.Text ?? "";
+            var bText = sb?.Text ?? "";
+            rows.Add(new CompareRow(i, sa?.StartTime ?? 0, sb?.StartTime ?? 0, aText, bText, aText == bText));
+        }
+        return new CompareDto(Map(jobA), Map(jobB), rows);
+    }
+
     public async Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default)
     {
         var job = await jobs.GetByIdAsync(id, ct);
