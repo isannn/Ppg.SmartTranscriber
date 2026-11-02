@@ -129,4 +129,6 @@ public sealed class WorkerOptions
     public int PollIntervalSeconds { get; set; } = 5;
     public string TempDir { get; set; } = "";
     public bool Enabled { get; set; } = true;
+    /// <summary>Parallel drain consumers — how many jobs run concurrently.</summary>
+    public int Concurrency { get; set; } = 1;
 }
