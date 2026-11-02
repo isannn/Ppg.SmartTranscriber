@@ -1,4 +1,5 @@
 using SmartTranscriber.Core.Domain;
+using SmartTranscriber.Core.Dto;
 
 namespace SmartTranscriber.Core.Ports;
 
@@ -10,4 +11,5 @@ public interface IJobRepository
     Task AddAsync(TranscriptionJob job, CancellationToken ct = default);
     Task UpdateAsync(TranscriptionJob job, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);
+    Task<JobStatsDto> GetStatsAsync(CancellationToken ct = default);
 }

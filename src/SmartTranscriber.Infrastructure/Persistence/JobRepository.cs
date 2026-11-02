@@ -3,6 +3,7 @@ using Dapper;
 using Npgsql;
 
 using SmartTranscriber.Core.Domain;
+using SmartTranscriber.Core.Dto;
 using SmartTranscriber.Core.Ports;
 
 namespace SmartTranscriber.Infrastructure.Persistence;
@@ -115,6 +116,30 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await conn.ExecuteAsync("DELETE FROM transcription_jobs WHERE id = @id", new { id });
+    }
+
+    public async Task<JobStatsDto> GetStatsAsync(CancellationToken ct = default)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        var total = await conn.ExecuteScalarAsync<int>("SELECT count(*) FROM transcription_jobs");
+        var byStatus = (await conn.QueryAsync<StatusCount>(
+                "SELECT status AS Status, count(*) AS Count FROM transcription_jobs GROUP BY status"))
+            .ToDictionary(r => r.Status, r => r.Count);
+        var byModel = (await conn.QueryAsync<JobStatsModel>(
+                "SELECT model AS Model, count(*) AS Jobs, coalesce(avg(duration_seconds), 0) AS AvgDurationSeconds " +
+                "FROM transcription_jobs WHERE status = 'Done' GROUP BY model ORDER BY Jobs DESC")).ToList();
+        var byDay = (await conn.QueryAsync<JobStatsDay>(
+                "SELECT to_char(created_at, 'YYYY-MM-DD') AS Date, count(*) AS Jobs " +
+                "FROM transcription_jobs GROUP BY 1 ORDER BY 1 DESC LIMIT 30")).ToList();
+        var totalDuration = await conn.ExecuteScalarAsync<double>(
+            "SELECT coalesce(sum(duration_seconds), 0) FROM transcription_jobs WHERE status = 'Done'");
+        return new JobStatsDto(total, byStatus, byModel, byDay, totalDuration);
+    }
+
+    private sealed class StatusCount
+    {
+        public string Status { get; set; } = "";
+        public int Count { get; set; }
     }
 
     private sealed class JobRow

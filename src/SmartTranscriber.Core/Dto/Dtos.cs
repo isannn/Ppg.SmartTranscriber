@@ -44,6 +44,15 @@ public sealed record SearchFilters(
     DateTime? To = null,
     string? Model = null);
 
+public sealed record JobStatsDto(
+    int Jobs,
+    Dictionary<string, int> ByStatus,
+    IReadOnlyList<JobStatsModel> ByModel,
+    IReadOnlyList<JobStatsDay> ByDay,
+    double TotalDurationSeconds);
+public sealed record JobStatsModel(string? Model, int Jobs, double AvgDurationSeconds);
+public sealed record JobStatsDay(string Date, int Jobs);
+
 public sealed record SearchHitDto(
     string Type,
     long SegmentId,

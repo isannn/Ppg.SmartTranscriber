@@ -69,6 +69,7 @@ public static class Program
               smarttranscriber api export [-o file]
               smarttranscriber api retranscribe <id> [--model M] [--language L] [--no-diarize]
               smarttranscriber api bulk delete|retry <id...>
+              smarttranscriber api stats
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -185,6 +186,7 @@ file static class ApiCommand
             "segment-text" => await SegmentTextAsync(http, args[1..]),
             "retranscribe" => await RetranscribeAsync(http, args[1..]),
             "bulk" => await BulkAsync(http, args[1..]),
+            "stats" => await SimpleGetAsync(http, "api/v1/stats"),
             "export" => await ExportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
@@ -456,6 +458,13 @@ file static class ApiCommand
             return 2;
         }
         var response = await http.PostAsJsonAsync("api/v1/jobs/bulk", new { action, ids });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> SimpleGetAsync(HttpClient http, string path)
+    {
+        var response = await http.GetAsync(path);
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }

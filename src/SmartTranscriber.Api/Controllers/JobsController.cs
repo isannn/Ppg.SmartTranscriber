@@ -121,6 +121,13 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
 
     public sealed record RetranscribeRequest(string? Model = null, string? Language = null, bool? Diarize = null, string? Hotwords = null);
 
+    /// <summary>Aggregate stats for dashboards.</summary>
+    [HttpGet("/api/v1/stats")]
+    public async Task<IActionResult> Stats(CancellationToken ct)
+    {
+        return Ok(await jobs.GetStatsAsync(ct));
+    }
+
     /// <summary>Bulk op over job ids: {action:"delete"|"retry", ids:[...]}.</summary>
     [HttpPost("bulk")]
     public async Task<IActionResult> Bulk([FromBody] BulkRequest request, CancellationToken ct)

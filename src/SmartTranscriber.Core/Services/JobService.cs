@@ -228,6 +228,8 @@ public sealed class JobService(
         return results;
     }
 
+    public Task<JobStatsDto> GetStatsAsync(CancellationToken ct = default) => jobs.GetStatsAsync(ct);
+
     public async Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default)
     {
         var job = await jobs.GetByIdAsync(id, ct);
