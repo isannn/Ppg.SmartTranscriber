@@ -207,6 +207,7 @@ file static class ApiCommand
         var dir = TranscribeCommand.OptValue(args, "--dir");
         var callback = TranscribeCommand.OptValue(args, "--callback");
         var hotwords = TranscribeCommand.OptValue(args, "--hotwords");
+        var priority = TranscribeCommand.OptValue(args, "--priority");
         var files = new List<string>();
         if (dir is not null)
         {
@@ -243,6 +244,10 @@ file static class ApiCommand
                 if (hotwords is not null)
                 {
                     content.Add(new StringContent(hotwords), "hotwords");
+                }
+                if (priority is not null)
+                {
+                    content.Add(new StringContent(priority), "priority");
                 }
                 var response = await http.PostAsync("api/v1/files", content);
                 var body = await response.Content.ReadAsStringAsync();
@@ -316,7 +321,13 @@ file static class ApiCommand
             return 2;
         }
         var response = await http.PostAsJsonAsync("api/v1/jobs/from-url",
-            new { url, callbackUrl = TranscribeCommand.OptValue(args, "--callback"), hotwords = TranscribeCommand.OptValue(args, "--hotwords") });
+            new
+            {
+                url,
+                callbackUrl = TranscribeCommand.OptValue(args, "--callback"),
+                hotwords = TranscribeCommand.OptValue(args, "--hotwords"),
+                priority = int.TryParse(TranscribeCommand.OptValue(args, "--priority"), out var pr) ? pr : 0
+            });
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }

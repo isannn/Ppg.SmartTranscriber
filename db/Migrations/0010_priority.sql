@@ -1,0 +1,1 @@
+ALTER TABLE transcription_jobs ADD COLUMN IF NOT EXISTS priority INT NOT NULL DEFAULT 0;
