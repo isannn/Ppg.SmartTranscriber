@@ -76,7 +76,10 @@ public sealed class TranscriptionPipeline(
             var stt = options.Value.Stt;
             var (transcriber, result) = await transcribers.TranscribeAsync(
                 localPath,
-                new TranscribeOptions(stt.DefaultModel, stt.DefaultLanguage, stt.Diarize),
+                new TranscribeOptions(
+                    job.Model ?? stt.DefaultModel,
+                    job.Language ?? stt.DefaultLanguage,
+                    job.Diarize),
                 ct, reporter);
 
             job.Progress = 90;

@@ -50,6 +50,14 @@ public sealed class SegmentRepository(NpgsqlDataSource dataSource) : ISegmentRep
         return affected == 1;
     }
 
+    public async Task<int> DeleteByJobAsync(Guid jobId, CancellationToken ct = default)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        return await conn.ExecuteAsync(
+            "DELETE FROM transcript_segments WHERE job_id = @jobId",
+            new { jobId });
+    }
+
     public async Task<int> RenameSpeakerAsync(Guid jobId, string from, string to, CancellationToken ct = default)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);

@@ -1,0 +1,5 @@
+- [x] spec
+- [ ] POST /jobs/{id}/retranscribe — reset status/segments/summary, store model+language+diarize on job
+- [ ] pipeline honors job.Model/Language instead of defaults when set
+- [ ] CLI api retranscribe <id> [--model M] [--language L] [--no-diarize]
+- [ ] build, MR, merge

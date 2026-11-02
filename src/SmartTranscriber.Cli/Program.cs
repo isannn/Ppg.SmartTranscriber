@@ -67,6 +67,7 @@ public static class Program
               smarttranscriber api merge <id> <from> <to>
               smarttranscriber api segment-text <id> <text>
               smarttranscriber api export [-o file]
+              smarttranscriber api retranscribe <id> [--model M] [--language L] [--no-diarize]
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -181,6 +182,7 @@ file static class ApiCommand
             "frames" => await FramesAsync(http, args[1..]),
             "merge" => await MergeAsync(http, args[1..]),
             "segment-text" => await SegmentTextAsync(http, args[1..]),
+            "retranscribe" => await RetranscribeAsync(http, args[1..]),
             "export" => await ExportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
@@ -404,6 +406,24 @@ file static class ApiCommand
         }
         var response = await http.PutAsJsonAsync(
             $"api/v1/segments/{pos[0]}/text", new { text = string.Join(' ', pos[1..]) });
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> RetranscribeAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => !a.StartsWith('-'));
+        if (id is null)
+        {
+            Console.Error.WriteLine("usage: api retranscribe <id> [--model M] [--language L] [--no-diarize]");
+            return 2;
+        }
+        var response = await http.PostAsJsonAsync($"api/v1/jobs/{id}/retranscribe", new
+        {
+            model = TranscribeCommand.OptValue(args, "--model"),
+            language = TranscribeCommand.OptValue(args, "--language"),
+            diarize = args.Contains("--no-diarize") ? (bool?)false : null
+        });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }
 

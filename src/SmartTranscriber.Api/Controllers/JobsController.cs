@@ -111,6 +111,16 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
         return Ok(new { updated });
     }
 
+    /// <summary>Reset to Pending and re-run transcription with new ASR params.</summary>
+    [HttpPost("{id:guid}/retranscribe")]
+    public async Task<IActionResult> Retranscribe(Guid id, [FromBody] RetranscribeRequest? request, CancellationToken ct)
+    {
+        var job = await jobs.RetranscribeAsync(id, request?.Model, request?.Language, request?.Diarize, ct);
+        return job is null ? NotFound() : Accepted(job);
+    }
+
+    public sealed record RetranscribeRequest(string? Model = null, string? Language = null, bool? Diarize = null);
+
     /// <summary>Merge one speaker label into another (diarization split).</summary>
     [HttpPost("{id:guid}/speakers/merge")]
     public async Task<IActionResult> MergeSpeaker(Guid id, [FromBody] RenameRequest request, CancellationToken ct)

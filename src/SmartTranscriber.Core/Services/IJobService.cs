@@ -14,4 +14,5 @@ public interface IJobService
     Task<(Stream Stream, string ObjectName)?> DownloadMediaAsync(Guid id, CancellationToken ct = default);
     /// <summary>Requeues a Failed job. Null = not found, false = not Failed.</summary>
     Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default);
+    Task<JobDto?> RetranscribeAsync(Guid id, string? model, string? language, bool? diarize, CancellationToken ct = default);
 }
