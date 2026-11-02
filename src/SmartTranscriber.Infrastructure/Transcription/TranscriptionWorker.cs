@@ -27,8 +27,9 @@ public sealed class TranscriptionWorker(
         }
 
         var sweep = SweepAsync(stoppingToken);
-        var drain = DrainAsync(stoppingToken);
-        await Task.WhenAll(sweep, drain);
+        var drains = Enumerable.Range(0, Math.Max(1, options.Value.Worker.Concurrency))
+            .Select(_ => DrainAsync(stoppingToken));
+        await Task.WhenAll(drains.Append(sweep));
     }
 
     private async Task DrainAsync(CancellationToken ct)
