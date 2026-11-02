@@ -21,7 +21,11 @@ public sealed class HttpWebhookNotifier(
 {
     public async Task NotifyJobFinishedAsync(TranscriptionJob job, CancellationToken ct = default)
     {
-        var endpoints = options.Value.Webhooks.Endpoints;
+        var endpoints = new List<string>(options.Value.Webhooks.Endpoints);
+        if (!string.IsNullOrWhiteSpace(job.CallbackUrl))
+        {
+            endpoints.Insert(0, job.CallbackUrl);
+        }
         if (endpoints.Count == 0)
         {
             return;
