@@ -1,0 +1,74 @@
+@page "/stats"
+@rendermode InteractiveServer
+@inject IJobService JobService
+
+<PageTitle>Stats — SmartTranscriber</PageTitle>
+
+<h2>Statistics</h2>
+
+<button class="btn btn-sm btn-secondary mb-2" @onclick="LoadAsync">Refresh</button>
+
+@if (_stats is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <div class="row mb-3">
+        <div class="col-md-3"><div class="card text-center p-3"><div class="fs-3">@_stats.Jobs</div><div class="text-muted">jobs</div></div></div>
+        <div class="col-md-3"><div class="card text-center p-3"><div class="fs-3">@FmtDuration(_stats.TotalDurationSeconds)</div><div class="text-muted">transcribed</div></div></div>
+        @foreach (var kv in _stats.ByStatus)
+        {
+            <div class="col-md-2"><div class="card text-center p-3"><div class="fs-3">@kv.Value</div><div class="text-muted">@kv.Key</div></div></div>
+        }
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h5>By model</h5>
+            <table class="table table-sm table-striped">
+                <thead><tr><th>Model</th><th>Jobs</th><th>Avg duration</th></tr></thead>
+                <tbody>
+                    @foreach (var m in _stats.ByModel)
+                    {
+                        <tr><td>@(m.Model ?? "—")</td><td>@m.Jobs</td><td>@FmtDuration(m.AvgDurationSeconds)</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <h5>Jobs per day</h5>
+            @if (_stats.ByDay.Count > 0)
+            {
+                var max = _stats.ByDay.Max(d => d.Jobs);
+                <div class="d-flex align-items-end gap-1" style="height:180px">
+                    @foreach (var d in _stats.ByDay)
+                    {
+                        var h = max > 0 ? 170 * d.Jobs / (double)max : 0;
+                        <div class="d-flex flex-column align-items-center flex-grow-1">
+                            <span class="small">@d.Jobs</span>
+                            <div style="height:@h px;width:100%;background:#0d6efd" title="@d.Date: @d.Jobs jobs"></div>
+                        </div>
+                    }
+                </div>
+                <div class="d-flex justify-content-between small text-muted mt-1">
+                    <span>@(_stats.ByDay.LastOrDefault()?.Date)</span>
+                    <span>@(_stats.ByDay.FirstOrDefault()?.Date)</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private JobStatsDto? _stats;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _stats = await JobService.GetStatsAsync();
+
+    private static string FmtDuration(double seconds)
+        => TimeSpan.FromSeconds(seconds).TotalHours >= 1
+            ? $"{TimeSpan.FromSeconds(seconds):h\\:mm\\:ss}"
+            : $"{TimeSpan.FromSeconds(seconds):mm\\:ss}";
+}
