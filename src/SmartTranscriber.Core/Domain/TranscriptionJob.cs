@@ -28,6 +28,8 @@ public class TranscriptionJob
     public string? Translation { get; set; }
     /// <summary>ISO language code of <see cref="Translation"/>.</summary>
     public string? TranslationLang { get; set; }
+    /// <summary>ffprobe container/stream metadata as JSON (camelCase).</summary>
+    public string? MediaMeta { get; set; }
     public int SegmentCount { get; set; }
 
     public List<TranscriptSegment> Segments { get; set; } = new();

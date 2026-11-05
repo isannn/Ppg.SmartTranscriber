@@ -119,6 +119,7 @@ public static class DependencyInjection
         services.AddSingleton<IMediaFetcher, YtDlpMediaFetcher>();
         services.AddSingleton<IKeyFrameExtractor, FfmpegKeyFrameExtractor>();
         services.AddSingleton<IClipExtractor, FfmpegClipExtractor>();
+        services.AddSingleton<IMediaProbe, FfprobeMediaProbe>();
         services.AddSingleton<IOcr, TesseractOcr>();
         services.AddScoped<IFrameRepository, MediaFrameRepository>();
         services.AddScoped<IWebhookDeliveryRepository, WebhookDeliveryRepository>();

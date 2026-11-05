@@ -24,7 +24,25 @@
                 <small>@_job.Progress%</small>
             </span>
         }
-        |
+        |@if (_job.MediaMeta is { } mm)
+        {
+            @if (mm.HasVideo && mm.Width is not null)
+            {
+                <span class="badge bg-secondary ms-1">@mm.Width×@mm.Height</span>
+            }
+            @if (!string.IsNullOrEmpty(mm.VideoCodec))
+            {
+                <span class="badge bg-secondary ms-1">@mm.VideoCodec</span>
+            }
+            @if (!string.IsNullOrEmpty(mm.AudioCodec))
+            {
+                <span class="badge bg-secondary ms-1">@mm.AudioCodec</span>
+            }
+            @if (!string.IsNullOrEmpty(mm.FormatName))
+            {
+                <span class="badge bg-light text-dark border ms-1">@mm.FormatName</span>
+            }
+        }
         <a href="/api/v1/jobs/@Id/transcript" download>.txt</a> ·
         <a href="/api/v1/jobs/@Id/transcript?format=srt">.srt</a> ·
         <a href="/api/v1/jobs/@Id/transcript?format=vtt">.vtt</a> ·

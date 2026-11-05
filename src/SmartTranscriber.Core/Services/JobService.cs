@@ -291,9 +291,29 @@ public sealed class JobService(
         return string.Concat(name.Select(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' ? c : '_'));
     }
 
+    private static readonly System.Text.Json.JsonSerializerOptions MetaJsonOpts =
+        new(System.Text.Json.JsonSerializerDefaults.Web);
+
     internal static JobDto Map(TranscriptionJob j) => new(
         j.Id, j.ObjectName, j.OriginalFileName, j.Status.ToString(),
         j.CreatedAt, j.CompletedAt, j.ErrorMessage, j.Model, j.Language,
         j.DurationSeconds, j.Summary, j.Progress, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count,
-        j.CallbackUrl, j.Priority, j.Tags, j.Translation, j.TranslationLang);
+        j.CallbackUrl, j.Priority, j.Tags, j.Translation, j.TranslationLang,
+        ParseMediaMeta(j.MediaMeta));
+
+    private static MediaMetaDto? ParseMediaMeta(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<MediaMetaDto>(json, MetaJsonOpts);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
 }
