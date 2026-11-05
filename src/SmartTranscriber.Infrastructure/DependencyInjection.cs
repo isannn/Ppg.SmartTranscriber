@@ -27,6 +27,7 @@ public static class DependencyInjection
     public static IServiceCollection AddSmartTranscriberCore(this IServiceCollection services)
     {
         services.AddScoped<IJobService, JobService>();
+        services.AddScoped<TranslateService>();
         services.AddScoped<ITranscriptService, TranscriptService>();
         services.AddSingleton<ITranscriptRenderer, TranscriptRenderer>();
         return services;

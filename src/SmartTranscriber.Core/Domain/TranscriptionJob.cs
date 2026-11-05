@@ -24,6 +24,10 @@ public class TranscriptionJob
     public int Priority { get; set; }
     /// <summary>Comma-separated tags for categorization/filtering.</summary>
     public string? Tags { get; set; }
+    /// <summary>Cached LLM translation of the transcript (single language).</summary>
+    public string? Translation { get; set; }
+    /// <summary>ISO language code of <see cref="Translation"/>.</summary>
+    public string? TranslationLang { get; set; }
     public int SegmentCount { get; set; }
 
     public List<TranscriptSegment> Segments { get; set; } = new();

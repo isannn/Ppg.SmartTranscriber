@@ -295,5 +295,5 @@ public sealed class JobService(
         j.Id, j.ObjectName, j.OriginalFileName, j.Status.ToString(),
         j.CreatedAt, j.CompletedAt, j.ErrorMessage, j.Model, j.Language,
         j.DurationSeconds, j.Summary, j.Progress, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count,
-        j.CallbackUrl, j.Priority, j.Tags);
+        j.CallbackUrl, j.Priority, j.Tags, j.Translation, j.TranslationLang);
 }
