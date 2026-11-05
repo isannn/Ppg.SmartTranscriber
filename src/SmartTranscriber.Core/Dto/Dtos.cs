@@ -36,6 +36,17 @@ public sealed record SegmentDto(
 public sealed record SpeakerUpdateRequest(string? Speaker);
 public sealed record TextUpdateRequest(string Text);
 
+public sealed record WebhookDeliveryDto(
+    long Id,
+    Guid JobId,
+    string Url,
+    string Event,
+    int? StatusCode,
+    bool Success,
+    string? Error,
+    int? DurationMs,
+    DateTime CreatedAt);
+
 public sealed record TranscriptResult(
     IReadOnlyList<TranscriptSegment> Segments,
     string? Model,
