@@ -1,0 +1,3 @@
+- [x] spec
+- [ ] turns derivation + strip + legend in Transcript.razor
+- [ ] build, MR, Jira

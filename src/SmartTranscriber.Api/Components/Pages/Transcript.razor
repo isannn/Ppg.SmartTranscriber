@@ -41,6 +41,26 @@
     {
         <audio @ref="_player" controls src="@MediaSrc" style="width:100%;" class="mb-3"></audio>
     }
+
+    @if (_turns.Count > 1)
+    {
+        <div class="mb-3">
+            <div class="d-flex flex-wrap gap-2 mb-1">
+                @foreach (var spk in _speakers)
+                {
+                    <span class="badge" style="background:@ColorFor(spk)">@spk</span>
+                }
+            </div>
+            <div style="position:relative; height:22px; background:#e9ecef; border-radius:4px; overflow:hidden">
+                @foreach (var t in _turns)
+                {
+                    <div title="@t.Speaker — @Fmt(t.Start)–@Fmt(t.End)"
+                         style="position:absolute; top:0; bottom:0; left:@Pct(t.Start)%; width:@PctWidth(t.Start, t.End)%; background:@ColorFor(t.Speaker); cursor:pointer; opacity:.7"
+                         @onclick="() => SeekAsync(t.Start)"></div>
+                }
+            </div>
+        </div>
+    }
 }
 @if (_summaryError is not null)
 {
@@ -128,6 +148,7 @@ else
         _job = await Jobs.GetJobAsync(Id);
         _segments = await Transcripts.GetSegmentsAsync(Id);
         _summary = _job?.Summary;
+        ComputeTurns();
         await ConnectHubAsync();
     }
 
@@ -167,6 +188,7 @@ else
                 _job = await Jobs.GetJobAsync(Id) ?? _job;
                 _segments = await Transcripts.GetSegmentsAsync(Id);
                 _summary = _job.Summary;
+                ComputeTurns();
             }
             StateHasChanged();
         });
@@ -227,6 +249,7 @@ else
         if (updated > 0)
         {
             _segments = await Transcripts.GetSegmentsAsync(Id);
+            ComputeTurns();
         }
     }
 
@@ -244,6 +267,64 @@ else
     }
 
     private const double LowConfidenceThreshold = 0.6;
+
+    private sealed record Turn(string Speaker, double Start, double End);
+
+    private static readonly string[] SpeakerPalette =
+        { "#0d6efd", "#dc3545", "#198754", "#ffc107", "#6f42c1", "#fd7e14", "#20c997", "#d63384" };
+
+    private List<Turn> _turns = new();
+    private List<string> _speakers = new();
+    private double _totalDuration = 1;
+
+    private void ComputeTurns()
+    {
+        _turns = new List<Turn>();
+        _speakers = new List<string>();
+        if (_segments is null || _segments.Count == 0)
+        {
+            return;
+        }
+        _totalDuration = Math.Max(_segments.Max(s => s.EndTime), 0.001);
+        string? cur = null;
+        double start = 0, end = 0;
+        foreach (var s in _segments.OrderBy(x => x.StartTime))
+        {
+            var spk = string.IsNullOrWhiteSpace(s.Speaker) ? "(unknown)" : s.Speaker!;
+            if (cur is null)
+            {
+                cur = spk; start = s.StartTime; end = s.EndTime;
+            }
+            else if (spk == cur)
+            {
+                end = Math.Max(end, s.EndTime);
+            }
+            else
+            {
+                _turns.Add(new Turn(cur, start, end));
+                if (!_speakers.Contains(cur)) { _speakers.Add(cur); }
+                cur = spk; start = s.StartTime; end = s.EndTime;
+            }
+        }
+        if (cur is not null)
+        {
+            _turns.Add(new Turn(cur, start, end));
+            if (!_speakers.Contains(cur)) { _speakers.Add(cur); }
+        }
+        if (_speakers.Count <= 1)
+        {
+            _turns.Clear(); // single/unknown speaker — no timeline value
+        }
+    }
+
+    private double Pct(double seconds) => Math.Clamp(seconds / _totalDuration * 100, 0, 100);
+    private double PctWidth(double start, double end) => Math.Max(Pct(end) - Pct(start), 0.3);
+
+    private string ColorFor(string spk)
+    {
+        var idx = _speakers.IndexOf(spk);
+        return SpeakerPalette[(idx < 0 ? 0 : idx) % SpeakerPalette.Length];
+    }
 
     private static string Fmt(double seconds)
         => TimeSpan.FromSeconds(seconds).ToString(@"hh\:mm\:ss");
