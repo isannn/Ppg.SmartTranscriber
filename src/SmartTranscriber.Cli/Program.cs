@@ -74,6 +74,10 @@ public static class Program
               smarttranscriber api tag <id> <tag1,tag2>
               smarttranscriber api jobs [--tag X]
               smarttranscriber api compare <idA> <idB>
+              smarttranscriber api translate <id> [--to en] [--regenerate]
+              smarttranscriber api clip <id> --from S --to S -o file.mp4
+              smarttranscriber api deliveries [--job ID] [--limit N]
+              smarttranscriber api voiceprints
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -193,8 +197,12 @@ file static class ApiCommand
             "stats" => await SimpleGetAsync(http, "api/v1/stats"),
             "tag" => await TagAsync(http, args[1..]),
             "compare" => await CompareAsync(http, args[1..]),
+            "translate" => await TranslateAsync(http, args[1..]),
+            "clip" => await ClipAsync(http, args[1..]),
             "export" => await ExportAsync(http, args[1..]),
             "import" => await ImportAsync(http, args[1..]),
+            "deliveries" => await DeliveriesAsync(http, args[1..]),
+            "voiceprints" => await SimpleGetAsync(http, "api/v1/voiceprints"),
             _ => UnknownApi(args[0])
         };
     }
@@ -513,11 +521,60 @@ file static class ApiCommand
         return response.IsSuccessStatusCode ? 0 : 1;
     }
 
+    private static async Task<int> TranslateAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => Guid.TryParse(a, out _));
+        if (id is null)
+        {
+            Console.Error.WriteLine("usage: api translate <id> [--to en] [--regenerate]");
+            return 2;
+        }
+        var response = await http.PostAsJsonAsync($"api/v1/jobs/{id}/translate", new
+        {
+            to = TranscribeCommand.OptValue(args, "--to") ?? "en",
+            regenerate = args.Contains("--regenerate")
+        });
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> ClipAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => Guid.TryParse(a, out _));
+        var from = TranscribeCommand.OptValue(args, "--from");
+        var to = TranscribeCommand.OptValue(args, "--to");
+        var outFile = TranscribeCommand.OptValue(args, "-o") ?? TranscribeCommand.OptValue(args, "--output");
+        if (id is null || from is null || to is null || outFile is null)
+        {
+            Console.Error.WriteLine("usage: api clip <id> --from S --to S -o file.mp4");
+            return 2;
+        }
+        var response = await http.GetAsync($"api/v1/jobs/{id}/clip?from={from}&to={to}");
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine(await response.Content.ReadAsStringAsync());
+            return 1;
+        }
+        await File.WriteAllBytesAsync(outFile, await response.Content.ReadAsByteArrayAsync());
+        Console.WriteLine($"saved {outFile}");
+        return 0;
+    }
+
     private static async Task<int> SimpleGetAsync(HttpClient http, string path)
     {
         var response = await http.GetAsync(path);
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> DeliveriesAsync(HttpClient http, string[] args)
+    {
+        var jobId = args.FirstOrDefault(a => Guid.TryParse(a, out _));
+        var limit = TranscribeCommand.OptValue(args, "--limit");
+        var query = "api/v1/webhook-deliveries?";
+        if (jobId is not null) { query += $"jobId={jobId}&"; }
+        if (limit is not null) { query += $"limit={limit}&"; }
+        return await SimpleGetAsync(http, query.TrimEnd('&', '?'));
     }
 
     private static async Task<int> ExportAsync(HttpClient http, string[] args)

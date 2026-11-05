@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import subprocess
 import tempfile
@@ -69,6 +70,7 @@ class Word:
     end: float
     text: str
     speaker: str | None = None
+    confidence: float | None = None
 
 
 @dataclass
@@ -77,6 +79,7 @@ class Block:
     start: float
     end: float
     text: str
+    confidence: float | None = None
 
 
 def resolve_device(device: str, compute_type: str | None) -> tuple[str, str]:
@@ -234,12 +237,19 @@ def transcribe_words(
     words: list[Word] = []
     duration = info.duration or 0
     for seg in segments:
+        # avg_logprob is a natural log-probability; exp() approximates a 0..1 score
+        seg_conf = None
+        avg_lp = getattr(seg, "avg_logprob", None)
+        if avg_lp is not None:
+            seg_conf = min(max(math.exp(avg_lp), 0.0), 1.0)
         if seg.words:
             for w in seg.words:
                 if w.start is not None and w.end is not None:
-                    words.append(Word(w.start, w.end, w.word))
+                    conf = getattr(w, "probability", None)
+                    words.append(Word(w.start, w.end, w.word,
+                                      confidence=conf if conf is not None else seg_conf))
         else:
-            words.append(Word(seg.start, seg.end, seg.text))
+            words.append(Word(seg.start, seg.end, seg.text, confidence=seg_conf))
         if progress and duration:
             progress(min(seg.end / duration, 0.99))
 
@@ -280,12 +290,19 @@ def assign_speakers(words: list[Word], turns: list[tuple[float, float, str]]) ->
 def words_to_blocks(words: list[Word], merge_gap: float = 1.5) -> list[Block]:
     """Group consecutive words by speaker into blocks."""
     blocks: list[Block] = []
+    confs: list[list[float]] = []
     for w in words:
+        conf = w.confidence
         if blocks and w.speaker == blocks[-1].speaker and w.start - blocks[-1].end <= merge_gap:
             blocks[-1].text += w.text
             blocks[-1].end = w.end
+            if conf is not None:
+                confs[-1].append(conf)
         else:
             blocks.append(Block(w.speaker, w.start, w.end, w.text.lstrip()))
+            confs.append([conf] if conf is not None else [])
+    for b, cs in zip(blocks, confs):
+        b.confidence = round(sum(cs) / len(cs), 3) if cs else None
     return blocks
 
 

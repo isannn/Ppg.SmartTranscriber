@@ -131,6 +131,28 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
 
     public sealed record TagsRequest(string Tags);
 
+    /// <summary>Trimmed mp4 clip of the job's media: ?from=&to= seconds.</summary>
+    [HttpGet("{id:guid}/clip")]
+    public async Task<IActionResult> Clip(Guid id, [FromQuery] double from, [FromQuery] double to, CancellationToken ct,
+        [FromServices] SmartTranscriber.Core.Services.ClipService clips = null!)
+    {
+        var clip = await clips.GetClipAsync(id, from, to, ct);
+        return clip is null
+            ? NotFound(new { error = "job missing, bad range, or ffmpeg unavailable" })
+            : File(clip.Value.Stream, "video/mp4", clip.Value.FileName, enableRangeProcessing: true);
+    }
+
+    /// <summary>LLM-translate the transcript: {to:"en", regenerate?} — cached per job.</summary>
+    [HttpPost("{id:guid}/translate")]
+    public async Task<IActionResult> Translate(Guid id, [FromBody] TranslateRequest request, CancellationToken ct,
+        [FromServices] SmartTranscriber.Core.Services.TranslateService translate = null!)
+    {
+        var job = await translate.TranslateAsync(id, request?.To ?? "en", request?.Regenerate ?? false, ct);
+        return job is null ? NotFound() : Ok(new { job.Id, translation = job.Translation, translationLang = job.TranslationLang });
+    }
+
+    public sealed record TranslateRequest(string? To = null, bool Regenerate = false);
+
     /// <summary>Positional transcript diff of two jobs — compare re-transcriptions.</summary>
     [HttpGet("compare")]
     public async Task<IActionResult> Compare([FromQuery] Guid a, [FromQuery] Guid b, CancellationToken ct)

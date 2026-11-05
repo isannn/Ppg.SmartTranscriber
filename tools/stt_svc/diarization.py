@@ -86,3 +86,63 @@ def diarize(
         for turn, _, speaker in result.itertracks(yield_label=True)
     ]
     return sorted(turns)
+
+
+_inference_cache: dict = {}
+
+
+def _get_inference(hf_token: str | None):
+    """Sliding-window speaker embedding model (wespeaker via pyannote Inference)."""
+    if "inf" not in _inference_cache:
+        _patch_hf_hub_compat()
+        from pyannote.audio import Inference
+
+        last_err = None
+        for name in ("pyannote/embedding", "pyannote/wespeaker-voxceleb-resnet34-LM"):
+            try:
+                _inference_cache["inf"] = Inference(name, use_auth_token=hf_token)
+                break
+            except Exception as e:
+                last_err = e
+        else:
+            raise DiarizationUnavailable(f"Cannot load speaker embedding model: {last_err}")
+    return _inference_cache["inf"]
+
+
+def extract_voiceprints(
+    wav_path: str,
+    turns: list[tuple[float, float, str]],
+    hf_token: str | None = None,
+) -> dict[str, list[float]] | None:
+    """Per-speaker voiceprint: sliding-window embeddings assigned to the
+    max-overlap speaker turn, duration-weighted mean, L2-normalized."""
+    import numpy as np
+
+    if not turns:
+        return None
+    inf = _get_inference(hf_token)
+    embs = inf({"audio": wav_path})  # {Segment: np.ndarray}
+
+    acc: dict[str, tuple["np.ndarray", float]] = {}
+    for seg, emb in embs.items():
+        best_spk, best_ov = None, 0.0
+        for s, e, spk in turns:
+            ov = min(seg.end, e) - max(seg.start, s)
+            if ov > best_ov:
+                best_ov, best_spk = ov, spk
+        if best_spk is None or best_ov <= 0:
+            continue
+        prev = acc.get(best_spk)
+        acc[best_spk] = (
+            (prev[0] + emb * best_ov, prev[1] + best_ov)
+            if prev is not None
+            else (emb * best_ov, best_ov)
+        )
+
+    out: dict[str, list[float]] = {}
+    for spk, (vec, weight) in acc.items():
+        v = vec / max(weight, 1e-9)
+        norm = float(np.linalg.norm(v))
+        if norm > 0:
+            out[spk] = (v / norm).astype(float).tolist()
+    return out or None

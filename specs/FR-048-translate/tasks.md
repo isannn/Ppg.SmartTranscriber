@@ -1,0 +1,5 @@
+- [x] spec
+- [ ] migration 0012 translation text+lang on jobs
+- [ ] TranslateAsync on IJobService → SummarizerChain with translate prompt
+- [ ] endpoint + CLI
+- [ ] build, MR, Jira

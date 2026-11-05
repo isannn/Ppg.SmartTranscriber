@@ -1,6 +1,8 @@
 @page "/jobs"
 @rendermode InteractiveServer
 @inject IJobService JobService
+@inject NavigationManager Nav
+@implements IAsyncDisposable
 
 <PageTitle>Jobs — SmartTranscriber</PageTitle>
 
@@ -70,10 +72,58 @@ else
 
 @code {
     private IReadOnlyList<JobDto>? _jobs;
+    private HubConnection? _hub;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        await ConnectHubAsync();
+    }
+
+    private async Task ConnectHubAsync()
+    {
+        try
+        {
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Nav.BaseUri.TrimEnd('/') + "/hubs/progress")
+                .Build();
+            _hub.On<JobUpdateDto>(ProgressHub.EventName, OnJobUpdate);
+            await _hub.StartAsync();
+            if (_jobs is not null)
+            {
+                foreach (var j in _jobs.Where(j => j.Status is not ("Done" or "Failed")))
+                {
+                    await _hub.InvokeAsync("JoinJob", j.Id.ToString());
+                }
+            }
+        }
+        catch
+        {
+            _hub = null; // realtime is best-effort
+        }
+    }
+
+    private void OnJobUpdate(JobUpdateDto u)
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (_jobs is null)
+            {
+                return;
+            }
+            _jobs = _jobs.Select(j => j.Id == u.JobId
+                ? j with { Progress = u.Progress ?? j.Progress, Status = u.Status ?? j.Status }
+                : j).ToList();
+            StateHasChanged();
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub is not null)
+        {
+            await _hub.DisposeAsync();
+        }
     }
 
     private async Task RetryAsync(Guid id)

@@ -1,0 +1,5 @@
+- [x] spec
+- [ ] LiveOptions + LiveSession + LiveSessionManager
+- [ ] LiveTranscriptionWorker (chunk→wav→sidecar→segments→sink)
+- [ ] LiveController + DI
+- [ ] build, MR, Jira

@@ -1,0 +1,3 @@
+- [x] spec
+- [ ] controller + auth exclusion + README
+- [ ] build, MR, Jira

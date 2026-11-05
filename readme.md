@@ -44,7 +44,7 @@ Two shapes from one codebase:
 | GET | `/api/v1/jobs/{id}/transcript?format=txt|json` | rendered transcript |
 | GET | `/api/v1/search?q=&limit=` | full-text search over segments |
 
-Swagger UI: `http://127.0.0.1:8460/swagger`.
+Swagger UI: `http://127.0.0.1:8460/swagger`. Machine-readable spec (no auth): `GET /api/v1/openapi.json`.
 
 ## CLI
 

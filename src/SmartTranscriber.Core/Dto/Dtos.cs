@@ -18,23 +18,54 @@ public sealed record JobDto(
     int SegmentCount,
     string? CallbackUrl = null,
     int Priority = 0,
-    string? Tags = null);
+    string? Tags = null,
+    string? Translation = null,
+    string? TranslationLang = null,
+    MediaMetaDto? MediaMeta = null);
+
+/// <summary>ffprobe container/stream metadata surfaced on jobs.</summary>
+public sealed record MediaMetaDto(
+    double? DurationSeconds,
+    string? FormatName,
+    string? VideoCodec,
+    string? AudioCodec,
+    int? Width,
+    int? Height,
+    long? BitrateBps,
+    bool HasVideo,
+    bool HasAudio);
+
+/// <summary>Live job update pushed over SignalR (progress % and/or status).</summary>
+public sealed record JobUpdateDto(Guid JobId, int? Progress, string? Status);
 
 public sealed record SegmentDto(
     long Id,
     double StartTime,
     double EndTime,
     string? Speaker,
-    string Text);
+    string Text,
+    double? Confidence = null);
 
 public sealed record SpeakerUpdateRequest(string? Speaker);
 public sealed record TextUpdateRequest(string Text);
+
+public sealed record WebhookDeliveryDto(
+    long Id,
+    Guid JobId,
+    string Url,
+    string Event,
+    int? StatusCode,
+    bool Success,
+    string? Error,
+    int? DurationMs,
+    DateTime CreatedAt);
 
 public sealed record TranscriptResult(
     IReadOnlyList<TranscriptSegment> Segments,
     string? Model,
     double? DurationSeconds,
-    string? Language);
+    string? Language,
+    IReadOnlyDictionary<string, float[]>? Voiceprints = null);
 
 public sealed record SummaryRequest(string? Model = null, string? Prompt = null, bool Regenerate = false);
 

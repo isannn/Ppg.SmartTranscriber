@@ -27,8 +27,11 @@ public static class DependencyInjection
     public static IServiceCollection AddSmartTranscriberCore(this IServiceCollection services)
     {
         services.AddScoped<IJobService, JobService>();
+        services.AddScoped<TranslateService>();
+        services.AddScoped<ClipService>();
         services.AddScoped<ITranscriptService, TranscriptService>();
         services.AddSingleton<ITranscriptRenderer, TranscriptRenderer>();
+        services.AddSingleton<IJobProgressSink, NullJobProgressSink>();
         return services;
     }
 
@@ -75,6 +78,8 @@ public static class DependencyInjection
         services.AddSmartTranscriberStt();
 
         services.AddSingleton<IJobQueue, JobQueue>();
+        services.AddSingleton<SmartTranscriber.Infrastructure.Live.LiveSessionManager>();
+        services.AddHostedService<LiveTranscriptionWorker>();
         services.AddScoped<IJobRepository, JobRepository>();
         services.AddScoped<ISegmentRepository, SegmentRepository>();
         services.AddScoped<IStorageService, MinioStorageService>();
@@ -115,8 +120,13 @@ public static class DependencyInjection
         services.AddSingleton<ExportService>();
         services.AddSingleton<IMediaFetcher, YtDlpMediaFetcher>();
         services.AddSingleton<IKeyFrameExtractor, FfmpegKeyFrameExtractor>();
+        services.AddSingleton<IClipExtractor, FfmpegClipExtractor>();
+        services.AddSingleton<IMediaProbe, FfprobeMediaProbe>();
+        services.AddSingleton<FfmpegAudioChunker>();
         services.AddSingleton<IOcr, TesseractOcr>();
         services.AddScoped<IFrameRepository, MediaFrameRepository>();
+        services.AddScoped<IWebhookDeliveryRepository, WebhookDeliveryRepository>();
+        services.AddScoped<IVoiceprintRepository, VoiceprintRepository>();
         services.AddHttpClient<IWebhookNotifier, HttpWebhookNotifier>();
         services.AddSingleton<TranscriberChain>();
         return services;

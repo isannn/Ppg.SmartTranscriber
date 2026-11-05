@@ -1,10 +1,14 @@
+using System.Text.Json;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using SmartTranscriber.Core.Domain;
+using SmartTranscriber.Core.Dto;
 using SmartTranscriber.Core.Options;
 using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
+using SmartTranscriber.Infrastructure.Media;
 
 namespace SmartTranscriber.Infrastructure.Transcription;
 
@@ -23,6 +27,10 @@ public sealed class TranscriptionPipeline(
     IFrameRepository frames,
     SummarizerChain summarizer,
     IOcr ocr,
+    IMediaProbe mediaProbe,
+    FfmpegAudioChunker audioChunker,
+    IVoiceprintRepository voiceprints,
+    IJobProgressSink progressSink,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
 {
@@ -45,6 +53,7 @@ public sealed class TranscriptionPipeline(
             job.Status = JobStatus.Processing;
             job.Progress = 10;
             await jobs.UpdateAsync(job, ct);
+            progressSink.Report(job.Id, 10, JobStatus.Processing);
 
             await using (var input = await storage.DownloadAsync(job.ObjectName, ct))
             await using (var output = File.Create(localPath))
@@ -54,6 +63,22 @@ public sealed class TranscriptionPipeline(
 
             job.Progress = 25;
             await jobs.UpdateAsync(job, ct);
+            progressSink.Report(job.Id, 25);
+
+            // ffprobe container/stream metadata — best-effort, never blocks STT
+            MediaMetadata? probedMeta = null;
+            try
+            {
+                probedMeta = await mediaProbe.ProbeAsync(localPath, ct);
+                if (probedMeta is not null)
+                {
+                    job.MediaMeta = JsonSerializer.Serialize(probedMeta, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Media probe failed for job {JobId}", job.Id);
+            }
 
             // live fraction from the sidecar mapped into the 30-90% band,
             // throttled so the DB sees a write at most every ~3s
@@ -70,27 +95,45 @@ public sealed class TranscriptionPipeline(
                 lastPct = pct;
                 lastWrite = now;
                 job.Progress = pct;
+                progressSink.Report(job.Id, pct);
                 _ = jobs.UpdateAsync(job, CancellationToken.None);
             });
 
             var stt = options.Value.Stt;
-            var (transcriber, result) = await transcribers.TranscribeAsync(
-                localPath,
-                new TranscribeOptions(
-                    job.Model ?? stt.DefaultModel,
-                    job.Language ?? stt.DefaultLanguage,
-                    job.Diarize,
-                    job.Hotwords),
-                ct, reporter);
+            var transcribeOptions = new TranscribeOptions(
+                job.Model ?? stt.DefaultModel,
+                job.Language ?? stt.DefaultLanguage,
+                job.Diarize,
+                job.Hotwords);
+
+            var chunkSeconds = options.Value.Chunking.MaxChunkSeconds;
+            var chunked = options.Value.Chunking.Enabled
+                && probedMeta?.DurationSeconds > chunkSeconds
+                    ? await TranscribeChunkedAsync(localPath, transcribeOptions, chunkSeconds, reporter, ct)
+                    : null;
+
+            ITranscriber transcriber;
+            TranscriptResult result;
+            if (chunked is not null)
+            {
+                (transcriber, result) = chunked.Value;
+            }
+            else
+            {
+                (transcriber, result) = await transcribers.TranscribeAsync(
+                    localPath, transcribeOptions, ct, reporter);
+            }
 
             job.Progress = 90;
             await jobs.UpdateAsync(job, ct);
+            progressSink.Report(job.Id, 90);
 
             foreach (var s in result.Segments)
             {
                 s.JobId = job.Id;
             }
             await segments.AddRangeAsync(result.Segments, ct);
+            await ApplyVoiceprintsAsync(job, result, ct);
 
             job.Status = JobStatus.Done;
             job.Progress = 100;
@@ -99,17 +142,20 @@ public sealed class TranscriptionPipeline(
             job.Language = result.Language;
             job.DurationSeconds = result.DurationSeconds;
             await jobs.UpdateAsync(job, ct);
+            progressSink.Report(job.Id, 100, JobStatus.Done);
             logger.LogInformation("Job {JobId} done via {Transcriber}: {Count} segments",
                 job.Id, transcriber.Name, result.Segments.Count);
             ExportForIg(job, result.Segments);
             await ExtractFramesAsync(job, localPath, ct);
             await AutoSummarizeAsync(job, result.Segments, ct);
+            await AutoTagAsync(job, result.Segments, ct);
             await webhooks.NotifyJobFinishedAsync(job, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             job.Status = JobStatus.Pending;
             await jobs.UpdateAsync(job, CancellationToken.None);
+            progressSink.Report(job.Id, job.Progress, JobStatus.Pending);
             throw;
         }
         catch (Exception ex)
@@ -119,6 +165,7 @@ public sealed class TranscriptionPipeline(
             job.ErrorMessage = ex.Message;
             job.CompletedAt = DateTime.UtcNow;
             await jobs.UpdateAsync(job, CancellationToken.None);
+            progressSink.Report(job.Id, job.Progress, JobStatus.Failed);
             await webhooks.NotifyJobFinishedAsync(job, CancellationToken.None);
         }
         finally
@@ -128,6 +175,138 @@ public sealed class TranscriptionPipeline(
     }
 
     /// <summary>Generate a summary right after Done when enabled — best-effort.</summary>
+    /// <summary>
+    /// Long-file path: ffmpeg splits audio into ~chunkSeconds wav parts,
+    /// each transcribed sequentially; segments merged with cumulative
+    /// time offsets into one TranscriptResult. Null → caller falls back
+    /// to a single pass.
+    /// </summary>
+    private async Task<(ITranscriber Transcriber, TranscriptResult Result)?> TranscribeChunkedAsync(
+        string localPath, TranscribeOptions opts, double chunkSeconds,
+        IProgress<double> reporter, CancellationToken ct)
+    {
+        var tempDir = options.Value.Worker.TempDir;
+        var chunkDir = Path.Combine(
+            string.IsNullOrWhiteSpace(tempDir) ? Path.GetTempPath() : tempDir,
+            $"st_chunks_{Guid.NewGuid():N}");
+        IReadOnlyList<string> chunks;
+        try
+        {
+            chunks = await audioChunker.SplitAsync(localPath, chunkSeconds, chunkDir, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Audio chunking failed, falling back to single pass");
+            return null;
+        }
+        if (chunks.Count <= 1)
+        {
+            return null;
+        }
+        logger.LogInformation("Job split into {Count} chunks of ~{Sec}s", chunks.Count, chunkSeconds);
+
+        var all = new List<TranscriptSegment>();
+        ITranscriber? first = null;
+        string? model = null, lang = null;
+        double? totalDur = 0;
+        double offset = 0;
+        var n = chunks.Count;
+        try
+        {
+            for (var i = 0; i < n; i++)
+            {
+                var chunkDur = (await mediaProbe.ProbeAsync(chunks[i], ct))?.DurationSeconds ?? chunkSeconds;
+                var sub = new Progress<double>(f => reporter?.Report(Math.Clamp((i + f) / n, 0, 1)));
+                var (t, r) = await transcribers.TranscribeAsync(chunks[i], opts, ct, sub);
+                first ??= t;
+                model ??= r.Model;
+                lang ??= r.Language;
+                totalDur = (totalDur ?? 0) + (r.DurationSeconds ?? chunkDur);
+                foreach (var s in r.Segments)
+                {
+                    s.StartTime += offset;
+                    s.EndTime += offset;
+                    all.Add(s);
+                }
+                offset += chunkDur;
+                try { File.Delete(chunks[i]); } catch { /* best effort */ }
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(chunkDir, true); } catch { /* best effort */ }
+        }
+        return (first!, new TranscriptResult(all, model, totalDur, lang));
+    }
+
+    /// <summary>
+    /// Cross-job speaker recognition: match sidecar voiceprints against
+    /// stored embeddings, remap segment labels to canonical names,
+    /// upsert fresh embeddings. Best-effort — never fails the job.
+    /// </summary>
+    private async Task ApplyVoiceprintsAsync(TranscriptionJob job, TranscriptResult result, CancellationToken ct)
+    {
+        var vpOpts = options.Value.Voiceprints;
+        if (!vpOpts.Enabled || result.Voiceprints is null || result.Voiceprints.Count == 0)
+        {
+            return;
+        }
+        try
+        {
+            var known = await voiceprints.ListAsync(ct);
+            var taken = known.Select(v => v.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var upserts = new List<(string Name, double[] Emb)>();
+
+            foreach (var (label, embF) in result.Voiceprints)
+            {
+                var emb = embF.Select(x => (double)x).ToArray();
+                var match = VoiceprintMatcher.BestMatch(emb, known, vpOpts.MatchThreshold);
+                string canonical;
+                if (match is not null)
+                {
+                    canonical = match.Name;
+                }
+                else
+                {
+                    canonical = label;
+                    for (var n = 2; taken.Contains(canonical); n++)
+                    {
+                        canonical = $"{label}-{n}";
+                    }
+                }
+                taken.Add(canonical);
+                if (!string.Equals(canonical, label, StringComparison.OrdinalIgnoreCase))
+                {
+                    map[label] = canonical;
+                }
+                upserts.Add((canonical, emb));
+            }
+
+            if (map.Count > 0)
+            {
+                await segments.RemapSpeakersAsync(job.Id, map, ct);
+                foreach (var s in result.Segments)
+                {
+                    if (s.Speaker is not null && map.TryGetValue(s.Speaker, out var c))
+                    {
+                        s.Speaker = c;
+                    }
+                }
+                logger.LogInformation("Job {JobId}: voiceprint remap {Map}", job.Id,
+                    string.Join(", ", map.Select(kv => $"{kv.Key}→{kv.Value}")));
+            }
+            foreach (var (name, emb) in upserts)
+            {
+                await voiceprints.UpsertAsync(name, emb, job.Id, ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Voiceprint matching failed for job {JobId}", job.Id);
+        }
+    }
+
     private async Task AutoSummarizeAsync(TranscriptionJob job, System.Collections.Generic.IReadOnlyList<TranscriptSegment> segs, CancellationToken ct)
     {
         if (!options.Value.Summary.AutoGenerate)
@@ -143,6 +322,34 @@ public sealed class TranscriptionPipeline(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Auto-summary failed for job {JobId}", job.Id);
+        }
+    }
+
+    /// <summary>LLM-suggest keywords into job.Tags after Done — best-effort.</summary>
+    private async Task AutoTagAsync(TranscriptionJob job, System.Collections.Generic.IReadOnlyList<TranscriptSegment> segs, CancellationToken ct)
+    {
+        if (!options.Value.Tags.AutoGenerate || !string.IsNullOrWhiteSpace(job.Tags))
+        {
+            return;
+        }
+        try
+        {
+            var prompt = "Suggest 3 to 6 short keyword tags for this transcript, separated by commas, no other text.";
+            var raw = await summarizer.SummarizeAsync(renderer.RenderText(job, segs),
+                new SmartTranscriber.Core.Dto.SummaryRequest(Prompt: prompt), ct);
+            var tags = string.Join(", ", raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Take(6).Select(t => t.Trim(' ', '.', ';', ':'))
+                .Where(t => t.Length is > 1 and <= 40));
+            if (!string.IsNullOrWhiteSpace(tags))
+            {
+                job.Tags = tags;
+                await jobs.UpdateAsync(job, ct);
+                logger.LogInformation("Job {JobId}: auto-tags stored ({Tags})", job.Id, tags);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Auto-tags failed for job {JobId}", job.Id);
         }
     }
 

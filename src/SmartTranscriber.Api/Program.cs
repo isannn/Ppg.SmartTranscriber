@@ -1,7 +1,12 @@
 using Microsoft.Extensions.Options;
 
+using Microsoft.AspNetCore.SignalR;
+
 using SmartTranscriber.Api.Components;
+using SmartTranscriber.Api.Hubs;
+using SmartTranscriber.Api.Services;
 using SmartTranscriber.Core.Options;
+using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Infrastructure;
 using SmartTranscriber.Infrastructure.Persistence;
 
@@ -23,6 +28,9 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddSmartTranscriberCore();
 builder.Services.AddSmartTranscriberInfrastructure(builder.Configuration);
+builder.Services.AddSignalR();
+// overrides the Null sink registered by AddSmartTranscriberCore
+builder.Services.AddSingleton<IJobProgressSink, SignalRJobProgressSink>();
 
 var app = builder.Build();
 
@@ -50,7 +58,8 @@ app.Use(async (ctx, next) =>
         .GetRequiredService<IOptions<SmartTranscriberOptions>>().Value.Auth.Token;
     if (!string.IsNullOrEmpty(expected)
         && ctx.Request.Path.StartsWithSegments("/api/v1")
-        && !ctx.Request.Path.StartsWithSegments("/api/v1/health"))
+        && !ctx.Request.Path.StartsWithSegments("/api/v1/health")
+        && !ctx.Request.Path.StartsWithSegments("/api/v1/openapi.json"))
     {
         var bearer = ctx.Request.Headers.Authorization.ToString();
         var token = bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
@@ -67,6 +76,7 @@ app.Use(async (ctx, next) =>
 });
 
 app.MapControllers();
+app.MapHub<ProgressHub>("/hubs/progress");
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

@@ -1,0 +1,6 @@
+- [x] spec
+- [ ] IJobProgressSink + NullJobProgressSink + JobUpdateDto
+- [ ] ProgressHub + SignalRJobProgressSink + Program.cs wiring
+- [ ] pipeline reporting
+- [ ] Jobs/Transcript razor hub clients
+- [ ] SignalR.Client package, build, MR, Jira

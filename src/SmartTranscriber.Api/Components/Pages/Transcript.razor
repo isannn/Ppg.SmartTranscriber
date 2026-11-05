@@ -4,6 +4,8 @@
 @inject IJobService Jobs
 @inject IJSRuntime JS
 @inject Microsoft.Extensions.Options.IOptions<SmartTranscriber.Core.Options.SmartTranscriberOptions> Opt
+@inject NavigationManager Nav
+@implements IAsyncDisposable
 
 <PageTitle>Transcript — SmartTranscriber</PageTitle>
 
@@ -12,7 +14,35 @@
 @if (_job is not null)
 {
     <p>
-        <strong>@_job.OriginalFileName</strong> — @_job.Status |
+        <strong>@_job.OriginalFileName</strong> — @_job.Status
+        @if (_job.Status is not ("Done" or "Failed"))
+        {
+            <span class="d-inline-block align-middle" style="width:120px">
+                <span class="progress" style="height:6px">
+                    <span class="progress-bar" style="width:@_job.Progress%"></span>
+                </span>
+                <small>@_job.Progress%</small>
+            </span>
+        }
+        |@if (_job.MediaMeta is { } mm)
+        {
+            @if (mm.HasVideo && mm.Width is not null)
+            {
+                <span class="badge bg-secondary ms-1">@mm.Width×@mm.Height</span>
+            }
+            @if (!string.IsNullOrEmpty(mm.VideoCodec))
+            {
+                <span class="badge bg-secondary ms-1">@mm.VideoCodec</span>
+            }
+            @if (!string.IsNullOrEmpty(mm.AudioCodec))
+            {
+                <span class="badge bg-secondary ms-1">@mm.AudioCodec</span>
+            }
+            @if (!string.IsNullOrEmpty(mm.FormatName))
+            {
+                <span class="badge bg-light text-dark border ms-1">@mm.FormatName</span>
+            }
+        }
         <a href="/api/v1/jobs/@Id/transcript" download>.txt</a> ·
         <a href="/api/v1/jobs/@Id/transcript?format=srt">.srt</a> ·
         <a href="/api/v1/jobs/@Id/transcript?format=vtt">.vtt</a> ·
@@ -28,6 +58,26 @@
     else
     {
         <audio @ref="_player" controls src="@MediaSrc" style="width:100%;" class="mb-3"></audio>
+    }
+
+    @if (_turns.Count > 1)
+    {
+        <div class="mb-3">
+            <div class="d-flex flex-wrap gap-2 mb-1">
+                @foreach (var spk in _speakers)
+                {
+                    <span class="badge" style="background:@ColorFor(spk)">@spk</span>
+                }
+            </div>
+            <div style="position:relative; height:22px; background:#e9ecef; border-radius:4px; overflow:hidden">
+                @foreach (var t in _turns)
+                {
+                    <div title="@t.Speaker — @Fmt(t.Start)–@Fmt(t.End)"
+                         style="position:absolute; top:0; bottom:0; left:@Pct(t.Start)%; width:@PctWidth(t.Start, t.End)%; background:@ColorFor(t.Speaker); cursor:pointer; opacity:.7"
+                         @onclick="() => SeekAsync(t.Start)"></div>
+                }
+            </div>
+        </div>
     }
 }
 @if (_summaryError is not null)
@@ -73,7 +123,10 @@ else
         <tbody>
             @foreach (var s in _segments)
             {
+                var lowConf = s.Confidence is < LowConfidenceThreshold;
                 <tr data-start="@s.StartTime" data-end="@s.EndTime" style="cursor:pointer"
+                    class="@(lowConf ? "table-warning" : "")"
+                    title="@(lowConf ? $"low ASR confidence: {s.Confidence:0.00}" : null)"
                     @onclick="() => SeekAsync(s.StartTime)">
                     <td>@Fmt(s.StartTime)</td>
                     <td>@Fmt(s.EndTime)</td>
@@ -102,6 +155,7 @@ else
     private JobDto? _job;
     private ElementReference _player;
     private bool _bound;
+    private HubConnection? _hub;
 
     private string? _summary;
     private string? _summaryError;
@@ -112,6 +166,58 @@ else
         _job = await Jobs.GetJobAsync(Id);
         _segments = await Transcripts.GetSegmentsAsync(Id);
         _summary = _job?.Summary;
+        ComputeTurns();
+        await ConnectHubAsync();
+    }
+
+    private async Task ConnectHubAsync()
+    {
+        try
+        {
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Nav.BaseUri.TrimEnd('/') + "/hubs/progress")
+                .Build();
+            _hub.On<JobUpdateDto>(ProgressHub.EventName, OnJobUpdate);
+            await _hub.StartAsync();
+            await _hub.InvokeAsync("JoinJob", Id.ToString());
+        }
+        catch
+        {
+            _hub = null; // realtime is best-effort
+        }
+    }
+
+    private async Task OnJobUpdate(JobUpdateDto u)
+    {
+        if (u.JobId != Id || _job is null)
+        {
+            return;
+        }
+        await InvokeAsync(async () =>
+        {
+            _job = _job with
+            {
+                Progress = u.Progress ?? _job.Progress,
+                Status = u.Status ?? _job.Status
+            };
+            // terminal state reached — pull final data once
+            if (u.Status is "Done" or "Failed" && (_segments is null || _segments.Count == 0))
+            {
+                _job = await Jobs.GetJobAsync(Id) ?? _job;
+                _segments = await Transcripts.GetSegmentsAsync(Id);
+                _summary = _job.Summary;
+                ComputeTurns();
+            }
+            StateHasChanged();
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub is not null)
+        {
+            await _hub.DisposeAsync();
+        }
     }
 
     private async Task SummarizeAsync()
@@ -161,6 +267,7 @@ else
         if (updated > 0)
         {
             _segments = await Transcripts.GetSegmentsAsync(Id);
+            ComputeTurns();
         }
     }
 
@@ -175,6 +282,66 @@ else
         {
             await Transcripts.UpdateTextAsync(segment.Id, text);
         }
+    }
+
+    private const double LowConfidenceThreshold = 0.6;
+
+    private sealed record Turn(string Speaker, double Start, double End);
+
+    private static readonly string[] SpeakerPalette =
+        { "#0d6efd", "#dc3545", "#198754", "#ffc107", "#6f42c1", "#fd7e14", "#20c997", "#d63384" };
+
+    private List<Turn> _turns = new();
+    private List<string> _speakers = new();
+    private double _totalDuration = 1;
+
+    private void ComputeTurns()
+    {
+        _turns = new List<Turn>();
+        _speakers = new List<string>();
+        if (_segments is null || _segments.Count == 0)
+        {
+            return;
+        }
+        _totalDuration = Math.Max(_segments.Max(s => s.EndTime), 0.001);
+        string? cur = null;
+        double start = 0, end = 0;
+        foreach (var s in _segments.OrderBy(x => x.StartTime))
+        {
+            var spk = string.IsNullOrWhiteSpace(s.Speaker) ? "(unknown)" : s.Speaker!;
+            if (cur is null)
+            {
+                cur = spk; start = s.StartTime; end = s.EndTime;
+            }
+            else if (spk == cur)
+            {
+                end = Math.Max(end, s.EndTime);
+            }
+            else
+            {
+                _turns.Add(new Turn(cur, start, end));
+                if (!_speakers.Contains(cur)) { _speakers.Add(cur); }
+                cur = spk; start = s.StartTime; end = s.EndTime;
+            }
+        }
+        if (cur is not null)
+        {
+            _turns.Add(new Turn(cur, start, end));
+            if (!_speakers.Contains(cur)) { _speakers.Add(cur); }
+        }
+        if (_speakers.Count <= 1)
+        {
+            _turns.Clear(); // single/unknown speaker — no timeline value
+        }
+    }
+
+    private double Pct(double seconds) => Math.Clamp(seconds / _totalDuration * 100, 0, 100);
+    private double PctWidth(double start, double end) => Math.Max(Pct(end) - Pct(start), 0.3);
+
+    private string ColorFor(string spk)
+    {
+        var idx = _speakers.IndexOf(spk);
+        return SpeakerPalette[(idx < 0 ? 0 : idx) % SpeakerPalette.Length];
     }
 
     private static string Fmt(double seconds)

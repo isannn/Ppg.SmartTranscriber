@@ -21,8 +21,12 @@ public sealed class SmartTranscriberOptions
     public AuthOptions Auth { get; set; } = new();
     public KeyFrameOptions KeyFrames { get; set; } = new();
     public SummaryOptions Summary { get; set; } = new();
+    public TagsOptions Tags { get; set; } = new();
     public WatchFolderOptions WatchFolder { get; set; } = new();
     public RetentionOptions Retention { get; set; } = new();
+    public VoiceprintsOptions Voiceprints { get; set; } = new();
+    public LiveOptions Live { get; set; } = new();
+    public ChunkingOptions Chunking { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -75,6 +79,12 @@ public sealed class RetentionOptions
     /// <summary>Delete Done/Failed jobs older than this. 0 = disabled.</summary>
     public int MaxAgeDays { get; set; } = 0;
     public int SweepMinutes { get; set; } = 60;
+}
+
+public sealed class TagsOptions
+{
+    /// <summary>LLM-suggest keywords into job.tags after Done. Off by default (LLM cost).</summary>
+    public bool AutoGenerate { get; set; } = false;
 }
 
 public sealed class WatchFolderOptions
@@ -131,4 +141,34 @@ public sealed class WorkerOptions
     public bool Enabled { get; set; } = true;
     /// <summary>Parallel drain consumers — how many jobs run concurrently.</summary>
     public int Concurrency { get; set; } = 1;
+}
+
+public sealed class VoiceprintsOptions
+{
+    /// <summary>Match diarized speakers against stored voiceprints and rename.</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>Cosine similarity threshold for "same person" (0..1).</summary>
+    public double MatchThreshold { get; set; } = 0.55;
+}
+
+public sealed class LiveOptions
+{
+    /// <summary>Master switch for live transcription sessions.</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>Worker tick interval for incremental transcription.</summary>
+    public int TickSeconds { get; set; } = 10;
+    /// <summary>Audio tail re-sent each tick for context (seconds).</summary>
+    public int OverlapSeconds { get; set; } = 10;
+    /// <summary>Minimum new audio before a tick transcribes (seconds).</summary>
+    public int MinChunkSeconds { get; set; } = 5;
+    /// <summary>Input format: PCM s16le, 16 kHz, mono = 32000 bytes/sec.</summary>
+    public int BytesPerSecond { get; set; } = 32000;
+}
+
+public sealed class ChunkingOptions
+{
+    /// <summary>Split files longer than MaxChunkSeconds into sequential chunks.</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>Chunk length in seconds (default 30 min).</summary>
+    public int MaxChunkSeconds { get; set; } = 1800;
 }
