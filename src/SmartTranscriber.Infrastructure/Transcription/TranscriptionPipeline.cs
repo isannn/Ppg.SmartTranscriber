@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -23,6 +25,7 @@ public sealed class TranscriptionPipeline(
     IFrameRepository frames,
     SummarizerChain summarizer,
     IOcr ocr,
+    IMediaProbe mediaProbe,
     IJobProgressSink progressSink,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
@@ -57,6 +60,20 @@ public sealed class TranscriptionPipeline(
             job.Progress = 25;
             await jobs.UpdateAsync(job, ct);
             progressSink.Report(job.Id, 25);
+
+            // ffprobe container/stream metadata — best-effort, never blocks STT
+            try
+            {
+                var meta = await mediaProbe.ProbeAsync(localPath, ct);
+                if (meta is not null)
+                {
+                    job.MediaMeta = JsonSerializer.Serialize(meta, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Media probe failed for job {JobId}", job.Id);
+            }
 
             // live fraction from the sidecar mapped into the 30-90% band,
             // throttled so the DB sees a write at most every ~3s

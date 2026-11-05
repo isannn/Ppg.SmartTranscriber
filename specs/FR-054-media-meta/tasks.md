@@ -1,0 +1,5 @@
+- [x] spec
+- [ ] IMediaProbe + FfprobeMediaProbe
+- [ ] entity + migration + repo (+ fix update params bug)
+- [ ] DTO + pipeline + UI badges
+- [ ] build, MR, Jira

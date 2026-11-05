@@ -20,7 +20,20 @@ public sealed record JobDto(
     int Priority = 0,
     string? Tags = null,
     string? Translation = null,
-    string? TranslationLang = null);
+    string? TranslationLang = null,
+    MediaMetaDto? MediaMeta = null);
+
+/// <summary>ffprobe container/stream metadata surfaced on jobs.</summary>
+public sealed record MediaMetaDto(
+    double? DurationSeconds,
+    string? FormatName,
+    string? VideoCodec,
+    string? AudioCodec,
+    int? Width,
+    int? Height,
+    long? BitrateBps,
+    bool HasVideo,
+    bool HasAudio);
 
 /// <summary>Live job update pushed over SignalR (progress % and/or status).</summary>
 public sealed record JobUpdateDto(Guid JobId, int? Progress, string? Status);
