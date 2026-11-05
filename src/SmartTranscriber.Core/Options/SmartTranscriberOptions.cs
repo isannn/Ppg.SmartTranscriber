@@ -25,6 +25,7 @@ public sealed class SmartTranscriberOptions
     public WatchFolderOptions WatchFolder { get; set; } = new();
     public RetentionOptions Retention { get; set; } = new();
     public VoiceprintsOptions Voiceprints { get; set; } = new();
+    public LiveOptions Live { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -147,4 +148,18 @@ public sealed class VoiceprintsOptions
     public bool Enabled { get; set; } = true;
     /// <summary>Cosine similarity threshold for "same person" (0..1).</summary>
     public double MatchThreshold { get; set; } = 0.55;
+}
+
+public sealed class LiveOptions
+{
+    /// <summary>Master switch for live transcription sessions.</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>Worker tick interval for incremental transcription.</summary>
+    public int TickSeconds { get; set; } = 10;
+    /// <summary>Audio tail re-sent each tick for context (seconds).</summary>
+    public int OverlapSeconds { get; set; } = 10;
+    /// <summary>Minimum new audio before a tick transcribes (seconds).</summary>
+    public int MinChunkSeconds { get; set; } = 5;
+    /// <summary>Input format: PCM s16le, 16 kHz, mono = 32000 bytes/sec.</summary>
+    public int BytesPerSecond { get; set; } = 32000;
 }
