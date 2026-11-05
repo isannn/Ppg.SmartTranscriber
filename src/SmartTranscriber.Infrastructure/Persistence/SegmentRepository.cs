@@ -11,7 +11,7 @@ namespace SmartTranscriber.Infrastructure.Persistence;
 public sealed class SegmentRepository(NpgsqlDataSource dataSource) : ISegmentRepository
 {
     private const string SegmentColumns =
-        "id, job_id AS JobId, start_time AS StartTime, end_time AS EndTime, speaker, text";
+        "id, job_id AS JobId, start_time AS StartTime, end_time AS EndTime, speaker, text, confidence AS Confidence";
 
     public async Task<IReadOnlyList<TranscriptSegment>> GetByJobAsync(Guid jobId, CancellationToken ct = default)
     {
@@ -26,8 +26,8 @@ public sealed class SegmentRepository(NpgsqlDataSource dataSource) : ISegmentRep
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await conn.ExecuteAsync(
-            "INSERT INTO transcript_segments (job_id, start_time, end_time, speaker, text) " +
-            "VALUES (@JobId, @StartTime, @EndTime, @Speaker, @Text)",
+            "INSERT INTO transcript_segments (job_id, start_time, end_time, speaker, text, confidence) " +
+            "VALUES (@JobId, @StartTime, @EndTime, @Speaker, @Text, @Confidence)",
             segments);
     }
 

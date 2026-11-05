@@ -97,6 +97,7 @@ async def transcribe(
                 "end": round(b.end, 3),
                 "text": b.text.strip(),
                 "speaker": b.speaker,
+                "confidence": b.confidence,
             }
             for b in blocks
         ],

@@ -93,7 +93,8 @@ public sealed class SidecarTranscriber(
             StartTime = s.Start,
             EndTime = s.End,
             Text = s.Text.Trim(),
-            Speaker = s.Speaker
+            Speaker = s.Speaker,
+            Confidence = s.Confidence
         }).ToList();
 
         return new TranscriptResult(segments, payload.Model, payload.Duration, payload.Language);
@@ -118,5 +119,6 @@ public sealed class SidecarTranscriber(
         [JsonPropertyName("end")] public double End { get; set; }
         [JsonPropertyName("text")] public string Text { get; set; } = "";
         [JsonPropertyName("speaker")] public string? Speaker { get; set; }
+        [JsonPropertyName("confidence")] public double? Confidence { get; set; }
     }
 }

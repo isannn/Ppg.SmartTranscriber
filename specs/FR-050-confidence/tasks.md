@@ -1,0 +1,5 @@
+- [x] spec
+- [ ] sidecar confidence plumbing (core.py, main.py)
+- [ ] entity + migration + repository + transcriber
+- [ ] DTO + UI highlight
+- [ ] build, MR, Jira
