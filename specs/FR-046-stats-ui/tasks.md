@@ -1,0 +1,3 @@
+- [x] spec
+- [ ] Stats.razor page + NavMenu link
+- [ ] build, MR, Jira
