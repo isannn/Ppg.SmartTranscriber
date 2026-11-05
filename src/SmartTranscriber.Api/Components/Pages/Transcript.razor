@@ -4,6 +4,8 @@
 @inject IJobService Jobs
 @inject IJSRuntime JS
 @inject Microsoft.Extensions.Options.IOptions<SmartTranscriber.Core.Options.SmartTranscriberOptions> Opt
+@inject NavigationManager Nav
+@implements IAsyncDisposable
 
 <PageTitle>Transcript — SmartTranscriber</PageTitle>
 
@@ -12,7 +14,17 @@
 @if (_job is not null)
 {
     <p>
-        <strong>@_job.OriginalFileName</strong> — @_job.Status |
+        <strong>@_job.OriginalFileName</strong> — @_job.Status
+        @if (_job.Status is not ("Done" or "Failed"))
+        {
+            <span class="d-inline-block align-middle" style="width:120px">
+                <span class="progress" style="height:6px">
+                    <span class="progress-bar" style="width:@_job.Progress%"></span>
+                </span>
+                <small>@_job.Progress%</small>
+            </span>
+        }
+        |
         <a href="/api/v1/jobs/@Id/transcript" download>.txt</a> ·
         <a href="/api/v1/jobs/@Id/transcript?format=srt">.srt</a> ·
         <a href="/api/v1/jobs/@Id/transcript?format=vtt">.vtt</a> ·
@@ -105,6 +117,7 @@ else
     private JobDto? _job;
     private ElementReference _player;
     private bool _bound;
+    private HubConnection? _hub;
 
     private string? _summary;
     private string? _summaryError;
@@ -115,6 +128,56 @@ else
         _job = await Jobs.GetJobAsync(Id);
         _segments = await Transcripts.GetSegmentsAsync(Id);
         _summary = _job?.Summary;
+        await ConnectHubAsync();
+    }
+
+    private async Task ConnectHubAsync()
+    {
+        try
+        {
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Nav.BaseUri.TrimEnd('/') + "/hubs/progress")
+                .Build();
+            _hub.On<JobUpdateDto>(ProgressHub.EventName, OnJobUpdate);
+            await _hub.StartAsync();
+            await _hub.InvokeAsync("JoinJob", Id.ToString());
+        }
+        catch
+        {
+            _hub = null; // realtime is best-effort
+        }
+    }
+
+    private async Task OnJobUpdate(JobUpdateDto u)
+    {
+        if (u.JobId != Id || _job is null)
+        {
+            return;
+        }
+        await InvokeAsync(async () =>
+        {
+            _job = _job with
+            {
+                Progress = u.Progress ?? _job.Progress,
+                Status = u.Status ?? _job.Status
+            };
+            // terminal state reached — pull final data once
+            if (u.Status is "Done" or "Failed" && (_segments is null || _segments.Count == 0))
+            {
+                _job = await Jobs.GetJobAsync(Id) ?? _job;
+                _segments = await Transcripts.GetSegmentsAsync(Id);
+                _summary = _job.Summary;
+            }
+            StateHasChanged();
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub is not null)
+        {
+            await _hub.DisposeAsync();
+        }
     }
 
     private async Task SummarizeAsync()

@@ -22,6 +22,9 @@ public sealed record JobDto(
     string? Translation = null,
     string? TranslationLang = null);
 
+/// <summary>Live job update pushed over SignalR (progress % and/or status).</summary>
+public sealed record JobUpdateDto(Guid JobId, int? Progress, string? Status);
+
 public sealed record SegmentDto(
     long Id,
     double StartTime,
