@@ -1,0 +1,3 @@
+- [x] spec
+- [ ] server.py MCP stdio + REST wrapper + tools
+- [ ] README + build-check (py_compile), MR, Jira
