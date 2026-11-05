@@ -24,6 +24,7 @@ public sealed class SmartTranscriberOptions
     public TagsOptions Tags { get; set; } = new();
     public WatchFolderOptions WatchFolder { get; set; } = new();
     public RetentionOptions Retention { get; set; } = new();
+    public VoiceprintsOptions Voiceprints { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -138,4 +139,12 @@ public sealed class WorkerOptions
     public bool Enabled { get; set; } = true;
     /// <summary>Parallel drain consumers — how many jobs run concurrently.</summary>
     public int Concurrency { get; set; } = 1;
+}
+
+public sealed class VoiceprintsOptions
+{
+    /// <summary>Match diarized speakers against stored voiceprints and rename.</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>Cosine similarity threshold for "same person" (0..1).</summary>
+    public double MatchThreshold { get; set; } = 0.55;
 }

@@ -41,6 +41,7 @@ async def transcribe(
     model: str = Query("", description="ASR model (gigaam-* or whisper size)"),
     language: str = Query("", description="Language code, e.g. ru/en"),
     diarize: bool = Query(True),
+    voiceprints: bool = Query(False, description="extract per-speaker embeddings"),
     num_speakers: int | None = Query(None),
     job_id: str = Query("", description="optional progress key — poll GET /progress/{job_id}"),
     hotwords: str = Query("", description="comma-separated glossary terms to bias ASR"),
@@ -90,6 +91,17 @@ async def transcribe(
             core.assign_speakers(words, turns)
         blocks = core.words_to_blocks(words)
 
+        vp = None
+        if turns and voiceprints:
+            try:
+                from diarization import extract_voiceprints
+
+                vp = extract_voiceprints(
+                    wav_path, turns, os.environ.get("HF_TOKEN")
+                )
+            except Exception as e:
+                print(f"voiceprints skipped: {e}")
+
     return {
         "segments": [
             {
@@ -105,6 +117,7 @@ async def transcribe(
         "language": meta.get("language"),
         "duration": meta.get("duration"),
         "diarization": bool(turns),
+        "voiceprints": vp,
     }
 
 

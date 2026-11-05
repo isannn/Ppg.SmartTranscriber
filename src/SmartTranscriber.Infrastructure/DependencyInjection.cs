@@ -123,6 +123,7 @@ public static class DependencyInjection
         services.AddSingleton<IOcr, TesseractOcr>();
         services.AddScoped<IFrameRepository, MediaFrameRepository>();
         services.AddScoped<IWebhookDeliveryRepository, WebhookDeliveryRepository>();
+        services.AddScoped<IVoiceprintRepository, VoiceprintRepository>();
         services.AddHttpClient<IWebhookNotifier, HttpWebhookNotifier>();
         services.AddSingleton<TranscriberChain>();
         return services;

@@ -64,7 +64,8 @@ public sealed record TranscriptResult(
     IReadOnlyList<TranscriptSegment> Segments,
     string? Model,
     double? DurationSeconds,
-    string? Language);
+    string? Language,
+    IReadOnlyDictionary<string, float[]>? Voiceprints = null);
 
 public sealed record SummaryRequest(string? Model = null, string? Prompt = null, bool Regenerate = false);
 

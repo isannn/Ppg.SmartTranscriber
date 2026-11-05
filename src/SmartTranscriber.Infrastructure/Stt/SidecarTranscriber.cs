@@ -54,7 +54,8 @@ public sealed class SidecarTranscriber(
                     (jobId == "" ? "" : $"&job_id={jobId}") +
                     (string.IsNullOrWhiteSpace(transcribeOptions.Hotwords)
                         ? ""
-                        : $"&hotwords={Uri.EscapeDataString(transcribeOptions.Hotwords)}");
+                        : $"&hotwords={Uri.EscapeDataString(transcribeOptions.Hotwords)}") +
+                    (transcribeOptions.Diarize ? "&voiceprints=true" : "");
 
         logger.LogInformation("Sending {File} to stt sidecar at {BaseUrl}", mediaPath, BaseUrl);
         var postTask = http.PostAsync($"{BaseUrl}/transcribe{query}", content, ct);
@@ -97,7 +98,8 @@ public sealed class SidecarTranscriber(
             Confidence = s.Confidence
         }).ToList();
 
-        return new TranscriptResult(segments, payload.Model, payload.Duration, payload.Language);
+        return new TranscriptResult(segments, payload.Model, payload.Duration, payload.Language,
+            payload.Voiceprints?.ToDictionary(kv => kv.Key, kv => kv.Value));
     }
 
     private sealed class SidecarProgress
@@ -111,6 +113,7 @@ public sealed class SidecarTranscriber(
         [JsonPropertyName("model")] public string? Model { get; set; }
         [JsonPropertyName("language")] public string? Language { get; set; }
         [JsonPropertyName("duration")] public double? Duration { get; set; }
+        [JsonPropertyName("voiceprints")] public Dictionary<string, float[]>? Voiceprints { get; set; }
     }
 
     private sealed class SidecarSegment
