@@ -8,6 +8,7 @@ using SmartTranscriber.Core.Dto;
 using SmartTranscriber.Core.Options;
 using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
+using SmartTranscriber.Infrastructure.Media;
 
 namespace SmartTranscriber.Infrastructure.Transcription;
 
@@ -27,6 +28,7 @@ public sealed class TranscriptionPipeline(
     SummarizerChain summarizer,
     IOcr ocr,
     IMediaProbe mediaProbe,
+    FfmpegAudioChunker audioChunker,
     IVoiceprintRepository voiceprints,
     IJobProgressSink progressSink,
     IOptions<SmartTranscriberOptions> options,
@@ -64,12 +66,13 @@ public sealed class TranscriptionPipeline(
             progressSink.Report(job.Id, 25);
 
             // ffprobe container/stream metadata — best-effort, never blocks STT
+            MediaMetadata? probedMeta = null;
             try
             {
-                var meta = await mediaProbe.ProbeAsync(localPath, ct);
-                if (meta is not null)
+                probedMeta = await mediaProbe.ProbeAsync(localPath, ct);
+                if (probedMeta is not null)
                 {
-                    job.MediaMeta = JsonSerializer.Serialize(meta, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                    job.MediaMeta = JsonSerializer.Serialize(probedMeta, new JsonSerializerOptions(JsonSerializerDefaults.Web));
                 }
             }
             catch (Exception ex)
@@ -97,14 +100,29 @@ public sealed class TranscriptionPipeline(
             });
 
             var stt = options.Value.Stt;
-            var (transcriber, result) = await transcribers.TranscribeAsync(
-                localPath,
-                new TranscribeOptions(
-                    job.Model ?? stt.DefaultModel,
-                    job.Language ?? stt.DefaultLanguage,
-                    job.Diarize,
-                    job.Hotwords),
-                ct, reporter);
+            var transcribeOptions = new TranscribeOptions(
+                job.Model ?? stt.DefaultModel,
+                job.Language ?? stt.DefaultLanguage,
+                job.Diarize,
+                job.Hotwords);
+
+            var chunkSeconds = options.Value.Chunking.MaxChunkSeconds;
+            var chunked = options.Value.Chunking.Enabled
+                && probedMeta?.DurationSeconds > chunkSeconds
+                    ? await TranscribeChunkedAsync(localPath, transcribeOptions, chunkSeconds, reporter, ct)
+                    : null;
+
+            ITranscriber transcriber;
+            TranscriptResult result;
+            if (chunked is not null)
+            {
+                (transcriber, result) = chunked.Value;
+            }
+            else
+            {
+                (transcriber, result) = await transcribers.TranscribeAsync(
+                    localPath, transcribeOptions, ct, reporter);
+            }
 
             job.Progress = 90;
             await jobs.UpdateAsync(job, ct);
@@ -157,6 +175,70 @@ public sealed class TranscriptionPipeline(
     }
 
     /// <summary>Generate a summary right after Done when enabled — best-effort.</summary>
+    /// <summary>
+    /// Long-file path: ffmpeg splits audio into ~chunkSeconds wav parts,
+    /// each transcribed sequentially; segments merged with cumulative
+    /// time offsets into one TranscriptResult. Null → caller falls back
+    /// to a single pass.
+    /// </summary>
+    private async Task<(ITranscriber Transcriber, TranscriptResult Result)?> TranscribeChunkedAsync(
+        string localPath, TranscribeOptions opts, double chunkSeconds,
+        IProgress<double> reporter, CancellationToken ct)
+    {
+        var tempDir = options.Value.Worker.TempDir;
+        var chunkDir = Path.Combine(
+            string.IsNullOrWhiteSpace(tempDir) ? Path.GetTempPath() : tempDir,
+            $"st_chunks_{Guid.NewGuid():N}");
+        IReadOnlyList<string> chunks;
+        try
+        {
+            chunks = await audioChunker.SplitAsync(localPath, chunkSeconds, chunkDir, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Audio chunking failed, falling back to single pass");
+            return null;
+        }
+        if (chunks.Count <= 1)
+        {
+            return null;
+        }
+        logger.LogInformation("Job split into {Count} chunks of ~{Sec}s", chunks.Count, chunkSeconds);
+
+        var all = new List<TranscriptSegment>();
+        ITranscriber? first = null;
+        string? model = null, lang = null;
+        double? totalDur = 0;
+        double offset = 0;
+        var n = chunks.Count;
+        try
+        {
+            for (var i = 0; i < n; i++)
+            {
+                var chunkDur = (await mediaProbe.ProbeAsync(chunks[i], ct))?.DurationSeconds ?? chunkSeconds;
+                var sub = new Progress<double>(f => reporter?.Report(Math.Clamp((i + f) / n, 0, 1)));
+                var (t, r) = await transcribers.TranscribeAsync(chunks[i], opts, ct, sub);
+                first ??= t;
+                model ??= r.Model;
+                lang ??= r.Language;
+                totalDur = (totalDur ?? 0) + (r.DurationSeconds ?? chunkDur);
+                foreach (var s in r.Segments)
+                {
+                    s.StartTime += offset;
+                    s.EndTime += offset;
+                    all.Add(s);
+                }
+                offset += chunkDur;
+                try { File.Delete(chunks[i]); } catch { /* best effort */ }
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(chunkDir, true); } catch { /* best effort */ }
+        }
+        return (first!, new TranscriptResult(all, model, totalDur, lang));
+    }
+
     /// <summary>
     /// Cross-job speaker recognition: match sidecar voiceprints against
     /// stored embeddings, remap segment labels to canonical names,

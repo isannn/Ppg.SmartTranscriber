@@ -26,6 +26,7 @@ public sealed class SmartTranscriberOptions
     public RetentionOptions Retention { get; set; } = new();
     public VoiceprintsOptions Voiceprints { get; set; } = new();
     public LiveOptions Live { get; set; } = new();
+    public ChunkingOptions Chunking { get; set; } = new();
 }
 
 public sealed class ApiOptions
@@ -162,4 +163,12 @@ public sealed class LiveOptions
     public int MinChunkSeconds { get; set; } = 5;
     /// <summary>Input format: PCM s16le, 16 kHz, mono = 32000 bytes/sec.</summary>
     public int BytesPerSecond { get; set; } = 32000;
+}
+
+public sealed class ChunkingOptions
+{
+    /// <summary>Split files longer than MaxChunkSeconds into sequential chunks.</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>Chunk length in seconds (default 30 min).</summary>
+    public int MaxChunkSeconds { get; set; } = 1800;
 }

@@ -1,0 +1,4 @@
+- [x] spec
+- [ ] ChunkingOptions + AudioChunker
+- [ ] pipeline chunk path
+- [ ] build, MR, Jira
