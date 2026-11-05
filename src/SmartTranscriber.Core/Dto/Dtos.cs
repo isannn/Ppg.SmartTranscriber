@@ -27,7 +27,8 @@ public sealed record SegmentDto(
     double StartTime,
     double EndTime,
     string? Speaker,
-    string Text);
+    string Text,
+    double? Confidence = null);
 
 public sealed record SpeakerUpdateRequest(string? Speaker);
 public sealed record TextUpdateRequest(string Text);

@@ -73,7 +73,10 @@ else
         <tbody>
             @foreach (var s in _segments)
             {
+                var lowConf = s.Confidence is < LowConfidenceThreshold;
                 <tr data-start="@s.StartTime" data-end="@s.EndTime" style="cursor:pointer"
+                    class="@(lowConf ? "table-warning" : "")"
+                    title="@(lowConf ? $"low ASR confidence: {s.Confidence:0.00}" : null)"
                     @onclick="() => SeekAsync(s.StartTime)">
                     <td>@Fmt(s.StartTime)</td>
                     <td>@Fmt(s.EndTime)</td>
@@ -176,6 +179,8 @@ else
             await Transcripts.UpdateTextAsync(segment.Id, text);
         }
     }
+
+    private const double LowConfidenceThreshold = 0.6;
 
     private static string Fmt(double seconds)
         => TimeSpan.FromSeconds(seconds).ToString(@"hh\:mm\:ss");

@@ -12,7 +12,7 @@ public sealed class TranscriptService(
     public async Task<IReadOnlyList<SegmentDto>> GetSegmentsAsync(Guid jobId, CancellationToken ct = default)
     {
         var list = await segments.GetByJobAsync(jobId, ct);
-        return list.Select(s => new SegmentDto(s.Id, s.StartTime, s.EndTime, s.Speaker, s.Text)).ToList();
+        return list.Select(s => new SegmentDto(s.Id, s.StartTime, s.EndTime, s.Speaker, s.Text, s.Confidence)).ToList();
     }
 
     public async Task<int?> RenameSpeakerAsync(Guid jobId, string from, string to, CancellationToken ct = default)
