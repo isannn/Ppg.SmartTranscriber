@@ -121,6 +121,7 @@ public static class DependencyInjection
         services.AddSingleton<IClipExtractor, FfmpegClipExtractor>();
         services.AddSingleton<IOcr, TesseractOcr>();
         services.AddScoped<IFrameRepository, MediaFrameRepository>();
+        services.AddScoped<IWebhookDeliveryRepository, WebhookDeliveryRepository>();
         services.AddHttpClient<IWebhookNotifier, HttpWebhookNotifier>();
         services.AddSingleton<TranscriberChain>();
         return services;

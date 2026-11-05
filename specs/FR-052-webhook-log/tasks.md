@@ -1,0 +1,5 @@
+- [x] spec
+- [ ] migration + entity + port + repo + DTO
+- [ ] notifier records attempts
+- [ ] endpoint + CLI
+- [ ] build, MR, Jira

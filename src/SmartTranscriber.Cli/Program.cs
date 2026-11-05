@@ -76,6 +76,7 @@ public static class Program
               smarttranscriber api compare <idA> <idB>
               smarttranscriber api translate <id> [--to en] [--regenerate]
               smarttranscriber api clip <id> --from S --to S -o file.mp4
+              smarttranscriber api deliveries [--job ID] [--limit N]
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -199,6 +200,7 @@ file static class ApiCommand
             "clip" => await ClipAsync(http, args[1..]),
             "export" => await ExportAsync(http, args[1..]),
             "import" => await ImportAsync(http, args[1..]),
+            "deliveries" => await DeliveriesAsync(http, args[1..]),
             _ => UnknownApi(args[0])
         };
     }
@@ -561,6 +563,16 @@ file static class ApiCommand
         var response = await http.GetAsync(path);
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> DeliveriesAsync(HttpClient http, string[] args)
+    {
+        var jobId = args.FirstOrDefault(a => Guid.TryParse(a, out _));
+        var limit = TranscribeCommand.OptValue(args, "--limit");
+        var query = "api/v1/webhook-deliveries?";
+        if (jobId is not null) { query += $"jobId={jobId}&"; }
+        if (limit is not null) { query += $"limit={limit}&"; }
+        return await SimpleGetAsync(http, query.TrimEnd('&', '?'));
     }
 
     private static async Task<int> ExportAsync(HttpClient http, string[] args)
