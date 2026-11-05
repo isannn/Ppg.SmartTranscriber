@@ -104,6 +104,7 @@ public sealed class TranscriptionPipeline(
             ExportForIg(job, result.Segments);
             await ExtractFramesAsync(job, localPath, ct);
             await AutoSummarizeAsync(job, result.Segments, ct);
+            await AutoTagAsync(job, result.Segments, ct);
             await webhooks.NotifyJobFinishedAsync(job, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -143,6 +144,34 @@ public sealed class TranscriptionPipeline(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Auto-summary failed for job {JobId}", job.Id);
+        }
+    }
+
+    /// <summary>LLM-suggest keywords into job.Tags after Done — best-effort.</summary>
+    private async Task AutoTagAsync(TranscriptionJob job, System.Collections.Generic.IReadOnlyList<TranscriptSegment> segs, CancellationToken ct)
+    {
+        if (!options.Value.Tags.AutoGenerate || !string.IsNullOrWhiteSpace(job.Tags))
+        {
+            return;
+        }
+        try
+        {
+            var prompt = "Suggest 3 to 6 short keyword tags for this transcript, separated by commas, no other text.";
+            var raw = await summarizer.SummarizeAsync(renderer.RenderText(job, segs),
+                new SmartTranscriber.Core.Dto.SummaryRequest(Prompt: prompt), ct);
+            var tags = string.Join(", ", raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Take(6).Select(t => t.Trim(' ', '.', ';', ':'))
+                .Where(t => t.Length is > 1 and <= 40));
+            if (!string.IsNullOrWhiteSpace(tags))
+            {
+                job.Tags = tags;
+                await jobs.UpdateAsync(job, ct);
+                logger.LogInformation("Job {JobId}: auto-tags stored ({Tags})", job.Id, tags);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Auto-tags failed for job {JobId}", job.Id);
         }
     }
 
