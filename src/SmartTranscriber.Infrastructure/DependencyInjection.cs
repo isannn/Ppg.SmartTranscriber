@@ -28,6 +28,7 @@ public static class DependencyInjection
     {
         services.AddScoped<IJobService, JobService>();
         services.AddScoped<TranslateService>();
+        services.AddScoped<ClipService>();
         services.AddScoped<ITranscriptService, TranscriptService>();
         services.AddSingleton<ITranscriptRenderer, TranscriptRenderer>();
         return services;
@@ -116,6 +117,7 @@ public static class DependencyInjection
         services.AddSingleton<ExportService>();
         services.AddSingleton<IMediaFetcher, YtDlpMediaFetcher>();
         services.AddSingleton<IKeyFrameExtractor, FfmpegKeyFrameExtractor>();
+        services.AddSingleton<IClipExtractor, FfmpegClipExtractor>();
         services.AddSingleton<IOcr, TesseractOcr>();
         services.AddScoped<IFrameRepository, MediaFrameRepository>();
         services.AddHttpClient<IWebhookNotifier, HttpWebhookNotifier>();

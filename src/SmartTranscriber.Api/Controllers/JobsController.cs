@@ -131,6 +131,17 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
 
     public sealed record TagsRequest(string Tags);
 
+    /// <summary>Trimmed mp4 clip of the job's media: ?from=&to= seconds.</summary>
+    [HttpGet("{id:guid}/clip")]
+    public async Task<IActionResult> Clip(Guid id, [FromQuery] double from, [FromQuery] double to, CancellationToken ct,
+        [FromServices] SmartTranscriber.Core.Services.ClipService clips = null!)
+    {
+        var clip = await clips.GetClipAsync(id, from, to, ct);
+        return clip is null
+            ? NotFound(new { error = "job missing, bad range, or ffmpeg unavailable" })
+            : File(clip.Value.Stream, "video/mp4", clip.Value.FileName, enableRangeProcessing: true);
+    }
+
     /// <summary>LLM-translate the transcript: {to:"en", regenerate?} — cached per job.</summary>
     [HttpPost("{id:guid}/translate")]
     public async Task<IActionResult> Translate(Guid id, [FromBody] TranslateRequest request, CancellationToken ct,
