@@ -58,7 +58,8 @@ app.Use(async (ctx, next) =>
         .GetRequiredService<IOptions<SmartTranscriberOptions>>().Value.Auth.Token;
     if (!string.IsNullOrEmpty(expected)
         && ctx.Request.Path.StartsWithSegments("/api/v1")
-        && !ctx.Request.Path.StartsWithSegments("/api/v1/health"))
+        && !ctx.Request.Path.StartsWithSegments("/api/v1/health")
+        && !ctx.Request.Path.StartsWithSegments("/api/v1/openapi.json"))
     {
         var bearer = ctx.Request.Headers.Authorization.ToString();
         var token = bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
