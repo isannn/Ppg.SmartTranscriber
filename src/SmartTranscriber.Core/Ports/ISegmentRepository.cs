@@ -12,5 +12,7 @@ public interface ISegmentRepository
     Task<int> DeleteByJobAsync(Guid jobId, CancellationToken ct = default);
     /// <summary>Bulk speaker rename across one job; returns affected rows.</summary>
     Task<int> RenameSpeakerAsync(Guid jobId, string from, string to, CancellationToken ct = default);
+    /// <summary>Apply several speaker renames at once (voiceprint canonicalization).</summary>
+    Task RemapSpeakersAsync(Guid jobId, IReadOnlyDictionary<string, string> map, CancellationToken ct = default);
     Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, int limit, SearchFilters? filters = null, CancellationToken ct = default);
 }

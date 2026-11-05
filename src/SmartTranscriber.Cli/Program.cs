@@ -77,6 +77,7 @@ public static class Program
               smarttranscriber api translate <id> [--to en] [--regenerate]
               smarttranscriber api clip <id> --from S --to S -o file.mp4
               smarttranscriber api deliveries [--job ID] [--limit N]
+              smarttranscriber api voiceprints
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -201,6 +202,7 @@ file static class ApiCommand
             "export" => await ExportAsync(http, args[1..]),
             "import" => await ImportAsync(http, args[1..]),
             "deliveries" => await DeliveriesAsync(http, args[1..]),
+            "voiceprints" => await SimpleGetAsync(http, "api/v1/voiceprints"),
             _ => UnknownApi(args[0])
         };
     }

@@ -1,0 +1,6 @@
+- [x] spec
+- [ ] sidecar extract_voiceprints + main.py param
+- [ ] entity + migration + repo port/impl + matcher + options
+- [ ] pipeline ApplyVoiceprintsAsync + RemapSpeakersAsync
+- [ ] result/DTO plumbing + endpoint + CLI
+- [ ] build, py_compile, MR, Jira

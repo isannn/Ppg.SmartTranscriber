@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using SmartTranscriber.Core.Domain;
+using SmartTranscriber.Core.Dto;
 using SmartTranscriber.Core.Options;
 using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Core.Services;
@@ -26,6 +27,7 @@ public sealed class TranscriptionPipeline(
     SummarizerChain summarizer,
     IOcr ocr,
     IMediaProbe mediaProbe,
+    IVoiceprintRepository voiceprints,
     IJobProgressSink progressSink,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
@@ -113,6 +115,7 @@ public sealed class TranscriptionPipeline(
                 s.JobId = job.Id;
             }
             await segments.AddRangeAsync(result.Segments, ct);
+            await ApplyVoiceprintsAsync(job, result, ct);
 
             job.Status = JobStatus.Done;
             job.Progress = 100;
@@ -154,6 +157,74 @@ public sealed class TranscriptionPipeline(
     }
 
     /// <summary>Generate a summary right after Done when enabled — best-effort.</summary>
+    /// <summary>
+    /// Cross-job speaker recognition: match sidecar voiceprints against
+    /// stored embeddings, remap segment labels to canonical names,
+    /// upsert fresh embeddings. Best-effort — never fails the job.
+    /// </summary>
+    private async Task ApplyVoiceprintsAsync(TranscriptionJob job, TranscriptResult result, CancellationToken ct)
+    {
+        var vpOpts = options.Value.Voiceprints;
+        if (!vpOpts.Enabled || result.Voiceprints is null || result.Voiceprints.Count == 0)
+        {
+            return;
+        }
+        try
+        {
+            var known = await voiceprints.ListAsync(ct);
+            var taken = known.Select(v => v.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var upserts = new List<(string Name, double[] Emb)>();
+
+            foreach (var (label, embF) in result.Voiceprints)
+            {
+                var emb = embF.Select(x => (double)x).ToArray();
+                var match = VoiceprintMatcher.BestMatch(emb, known, vpOpts.MatchThreshold);
+                string canonical;
+                if (match is not null)
+                {
+                    canonical = match.Name;
+                }
+                else
+                {
+                    canonical = label;
+                    for (var n = 2; taken.Contains(canonical); n++)
+                    {
+                        canonical = $"{label}-{n}";
+                    }
+                }
+                taken.Add(canonical);
+                if (!string.Equals(canonical, label, StringComparison.OrdinalIgnoreCase))
+                {
+                    map[label] = canonical;
+                }
+                upserts.Add((canonical, emb));
+            }
+
+            if (map.Count > 0)
+            {
+                await segments.RemapSpeakersAsync(job.Id, map, ct);
+                foreach (var s in result.Segments)
+                {
+                    if (s.Speaker is not null && map.TryGetValue(s.Speaker, out var c))
+                    {
+                        s.Speaker = c;
+                    }
+                }
+                logger.LogInformation("Job {JobId}: voiceprint remap {Map}", job.Id,
+                    string.Join(", ", map.Select(kv => $"{kv.Key}→{kv.Value}")));
+            }
+            foreach (var (name, emb) in upserts)
+            {
+                await voiceprints.UpsertAsync(name, emb, job.Id, ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Voiceprint matching failed for job {JobId}", job.Id);
+        }
+    }
+
     private async Task AutoSummarizeAsync(TranscriptionJob job, System.Collections.Generic.IReadOnlyList<TranscriptSegment> segs, CancellationToken ct)
     {
         if (!options.Value.Summary.AutoGenerate)
