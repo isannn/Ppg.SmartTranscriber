@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddScoped<ClipService>();
         services.AddScoped<ITranscriptService, TranscriptService>();
         services.AddSingleton<ITranscriptRenderer, TranscriptRenderer>();
+        services.AddSingleton<IJobProgressSink, NullJobProgressSink>();
         return services;
     }
 

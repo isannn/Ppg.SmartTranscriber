@@ -23,6 +23,7 @@ public sealed class TranscriptionPipeline(
     IFrameRepository frames,
     SummarizerChain summarizer,
     IOcr ocr,
+    IJobProgressSink progressSink,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
 {
@@ -45,6 +46,7 @@ public sealed class TranscriptionPipeline(
             job.Status = JobStatus.Processing;
             job.Progress = 10;
             await jobs.UpdateAsync(job, ct);
+            progressSink.Report(job.Id, 10, JobStatus.Processing);
 
             await using (var input = await storage.DownloadAsync(job.ObjectName, ct))
             await using (var output = File.Create(localPath))
@@ -54,6 +56,7 @@ public sealed class TranscriptionPipeline(
 
             job.Progress = 25;
             await jobs.UpdateAsync(job, ct);
+            progressSink.Report(job.Id, 25);
 
             // live fraction from the sidecar mapped into the 30-90% band,
             // throttled so the DB sees a write at most every ~3s
@@ -70,6 +73,7 @@ public sealed class TranscriptionPipeline(
                 lastPct = pct;
                 lastWrite = now;
                 job.Progress = pct;
+                progressSink.Report(job.Id, pct);
                 _ = jobs.UpdateAsync(job, CancellationToken.None);
             });
 
@@ -85,6 +89,7 @@ public sealed class TranscriptionPipeline(
 
             job.Progress = 90;
             await jobs.UpdateAsync(job, ct);
+            progressSink.Report(job.Id, 90);
 
             foreach (var s in result.Segments)
             {
@@ -99,6 +104,7 @@ public sealed class TranscriptionPipeline(
             job.Language = result.Language;
             job.DurationSeconds = result.DurationSeconds;
             await jobs.UpdateAsync(job, ct);
+            progressSink.Report(job.Id, 100, JobStatus.Done);
             logger.LogInformation("Job {JobId} done via {Transcriber}: {Count} segments",
                 job.Id, transcriber.Name, result.Segments.Count);
             ExportForIg(job, result.Segments);
@@ -111,6 +117,7 @@ public sealed class TranscriptionPipeline(
         {
             job.Status = JobStatus.Pending;
             await jobs.UpdateAsync(job, CancellationToken.None);
+            progressSink.Report(job.Id, job.Progress, JobStatus.Pending);
             throw;
         }
         catch (Exception ex)
@@ -120,6 +127,7 @@ public sealed class TranscriptionPipeline(
             job.ErrorMessage = ex.Message;
             job.CompletedAt = DateTime.UtcNow;
             await jobs.UpdateAsync(job, CancellationToken.None);
+            progressSink.Report(job.Id, job.Progress, JobStatus.Failed);
             await webhooks.NotifyJobFinishedAsync(job, CancellationToken.None);
         }
         finally
