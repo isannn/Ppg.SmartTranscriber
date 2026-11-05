@@ -74,6 +74,7 @@ public static class Program
               smarttranscriber api tag <id> <tag1,tag2>
               smarttranscriber api jobs [--tag X]
               smarttranscriber api compare <idA> <idB>
+              smarttranscriber api translate <id> [--to en] [--regenerate]
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -193,6 +194,7 @@ file static class ApiCommand
             "stats" => await SimpleGetAsync(http, "api/v1/stats"),
             "tag" => await TagAsync(http, args[1..]),
             "compare" => await CompareAsync(http, args[1..]),
+            "translate" => await TranslateAsync(http, args[1..]),
             "export" => await ExportAsync(http, args[1..]),
             "import" => await ImportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
@@ -509,6 +511,23 @@ file static class ApiCommand
             return 2;
         }
         var response = await http.GetAsync($"api/v1/jobs/compare?a={ids[0]}&b={ids[1]}");
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> TranslateAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => Guid.TryParse(a, out _));
+        if (id is null)
+        {
+            Console.Error.WriteLine("usage: api translate <id> [--to en] [--regenerate]");
+            return 2;
+        }
+        var response = await http.PostAsJsonAsync($"api/v1/jobs/{id}/translate", new
+        {
+            to = TranscribeCommand.OptValue(args, "--to") ?? "en",
+            regenerate = args.Contains("--regenerate")
+        });
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }
