@@ -75,6 +75,7 @@ public static class Program
               smarttranscriber api jobs [--tag X]
               smarttranscriber api compare <idA> <idB>
               smarttranscriber api translate <id> [--to en] [--regenerate]
+              smarttranscriber api clip <id> --from S --to S -o file.mp4
               smarttranscriber api retry <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
@@ -195,6 +196,7 @@ file static class ApiCommand
             "tag" => await TagAsync(http, args[1..]),
             "compare" => await CompareAsync(http, args[1..]),
             "translate" => await TranslateAsync(http, args[1..]),
+            "clip" => await ClipAsync(http, args[1..]),
             "export" => await ExportAsync(http, args[1..]),
             "import" => await ImportAsync(http, args[1..]),
             _ => UnknownApi(args[0])
@@ -530,6 +532,28 @@ file static class ApiCommand
         });
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> ClipAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => Guid.TryParse(a, out _));
+        var from = TranscribeCommand.OptValue(args, "--from");
+        var to = TranscribeCommand.OptValue(args, "--to");
+        var outFile = TranscribeCommand.OptValue(args, "-o") ?? TranscribeCommand.OptValue(args, "--output");
+        if (id is null || from is null || to is null || outFile is null)
+        {
+            Console.Error.WriteLine("usage: api clip <id> --from S --to S -o file.mp4");
+            return 2;
+        }
+        var response = await http.GetAsync($"api/v1/jobs/{id}/clip?from={from}&to={to}");
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine(await response.Content.ReadAsStringAsync());
+            return 1;
+        }
+        await File.WriteAllBytesAsync(outFile, await response.Content.ReadAsByteArrayAsync());
+        Console.WriteLine($"saved {outFile}");
+        return 0;
     }
 
     private static async Task<int> SimpleGetAsync(HttpClient http, string path)

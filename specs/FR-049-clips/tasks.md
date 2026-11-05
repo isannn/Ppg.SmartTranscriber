@@ -1,0 +1,5 @@
+- [x] spec
+- [ ] IClipExtractor + FfmpegClipExtractor
+- [ ] ClipService (S3→temp→ffmpeg→stream)
+- [ ] endpoint + CLI
+- [ ] build, MR, Jira
