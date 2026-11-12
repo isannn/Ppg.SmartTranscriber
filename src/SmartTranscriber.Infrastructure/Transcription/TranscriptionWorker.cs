@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using SmartTranscriber.Core.Domain;
 using SmartTranscriber.Core.Options;
 using SmartTranscriber.Core.Ports;
 
@@ -24,6 +25,29 @@ public sealed class TranscriptionWorker(
         {
             logger.LogInformation("Transcription worker disabled");
             return;
+        }
+
+        // crash/restart recovery: requeue Processing orphans, fail Downloading ones
+        try
+        {
+            await using (var scope = services.CreateAsyncScope())
+            {
+                var jobs = scope.ServiceProvider.GetRequiredService<IJobRepository>();
+                var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookNotifier>();
+                var recovered = await jobs.ResetInterruptedJobsAsync(stoppingToken);
+                foreach (var job in recovered)
+                {
+                    logger.LogWarning("Recovered interrupted job {JobId} → {Status}", job.Id, job.Status);
+                    if (job.Status == JobStatus.Failed)
+                    {
+                        await webhooks.NotifyJobFinishedAsync(job, stoppingToken);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Interrupted-job recovery failed");
         }
 
         var sweep = SweepAsync(stoppingToken);
