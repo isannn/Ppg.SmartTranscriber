@@ -33,6 +33,8 @@ def _load_api_key():
 API_KEY = _load_api_key()
 
 class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def _json(self, code, obj):
         body = json.dumps(obj).encode()
         self.send_response(code)
@@ -45,12 +47,32 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200 if self.path == "/health" else 404,
                    {"status": "ok", "service": "llm-bridge"} if self.path == "/health" else {"error": "not found"})
 
+    def _read_body(self):
+        if "chunked" in self.headers.get("Transfer-Encoding", "").lower():
+            buf = b""
+            while True:
+                line = self.rfile.readline(65536).strip()
+                try:
+                    n = int(line.split(b";")[0], 16)
+                except ValueError:
+                    break
+                if n == 0:
+                    while True:
+                        t = self.rfile.readline(65536)
+                        if t in (b"\r\n", b"\n", b""):
+                            break
+                    break
+                buf += self.rfile.read(n)
+                self.rfile.read(2)
+            return buf
+        length = int(self.headers.get("Content-Length", "0"))
+        return self.rfile.read(length) if length else b""
+
     def do_POST(self):
         if self.path != "/chat":
             return self._json(404, {"error": "not found"})
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            payload = json.loads(self.rfile.read(length) or b"{}")
+            payload = json.loads(self._read_body() or b"{}")
             prompt = payload.get("prompt", "")
             if not prompt:
                 return self._json(400, {"error": "prompt required"})
