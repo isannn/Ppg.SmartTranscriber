@@ -103,7 +103,7 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(Math.Max(60, opts.Stt.TimeoutSeconds));
         });
 
-        services.AddSingleton<ITranscriber, SidecarTranscriber>();
+        services.AddSingleton<ITranscriber>(sp => sp.GetRequiredService<SidecarTranscriber>());
         services.AddHttpClient<AcpSummarizer>((sp, client) =>
         {
             var opts = sp.GetRequiredService<IOptions<SmartTranscriberOptions>>().Value;

@@ -37,7 +37,20 @@ var app = builder.Build();
 var connectionString = builder.Configuration.GetSection("SmartTranscriber")["ConnectionString"];
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
-    DatabaseMigrator.Migrate(connectionString);
+    // Postgres may still be starting (e.g. docker restart) — retry instead of crashing
+    for (var attempt = 1; ; attempt++)
+    {
+        try
+        {
+            DatabaseMigrator.Migrate(connectionString);
+            break;
+        }
+        catch (Exception ex) when (attempt < 30)
+        {
+            Console.Error.WriteLine($"DB migration attempt {attempt} failed: {ex.Message}; retrying in 2s");
+            Thread.Sleep(2000);
+        }
+    }
 }
 
 app.UseSwagger();

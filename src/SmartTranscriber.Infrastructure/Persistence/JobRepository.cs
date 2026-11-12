@@ -67,6 +67,19 @@ public sealed class JobRepository(NpgsqlDataSource dataSource) : IJobRepository
             $"RETURNING {JobColumns}");
     }
 
+    public async Task<IReadOnlyList<TranscriptionJob>> ResetInterruptedJobsAsync(CancellationToken ct = default)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        var requeued = (await conn.QueryAsync<TranscriptionJob>(
+            $"UPDATE transcription_jobs SET status = 'Pending', progress = 0 " +
+            $"WHERE status = 'Processing' RETURNING {JobColumns}")).ToList();
+        var failed = (await conn.QueryAsync<TranscriptionJob>(
+            $"UPDATE transcription_jobs SET status = 'Failed', " +
+            $"error_message = 'url ingest interrupted by restart', completed_at = now() " +
+            $"WHERE status = 'Downloading' RETURNING {JobColumns}")).ToList();
+        return requeued.Concat(failed).ToList();
+    }
+
     public async Task AddAsync(TranscriptionJob job, CancellationToken ct = default)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);

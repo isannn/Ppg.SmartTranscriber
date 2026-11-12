@@ -11,7 +11,7 @@ public sealed class JobService(
     IJobRepository jobs,
     IStorageService storage,
     IJobQueue queue,
-    IServiceProvider services,
+    IServiceScopeFactory services,
     ISegmentRepository segments,
     IWebhookNotifier webhooks,
     ILogger<JobService> logger) : IJobService
@@ -207,7 +207,8 @@ public sealed class JobService(
     public async Task<IReadOnlyList<(Guid Id, bool Ok, string Detail)>> BulkAsync(string action, IReadOnlyList<Guid> ids, CancellationToken ct = default)
     {
         var results = new List<(Guid, bool, string)>();
-        var frameRepo = services.GetService<IFrameRepository>();
+        using var scope = services.CreateScope();
+        var frameRepo = scope.ServiceProvider.GetService<IFrameRepository>();
         foreach (var id in ids)
         {
             try

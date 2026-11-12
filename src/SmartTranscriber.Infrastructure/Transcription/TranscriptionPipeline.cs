@@ -44,9 +44,11 @@ public sealed class TranscriptionPipeline(
         }
 
         var tempDir = options.Value.Worker.TempDir;
+        // unique per attempt — a retried job must not collide with a file
+        // still held by the previous run's ffmpeg/sidecar
         var localPath = Path.Combine(
             string.IsNullOrWhiteSpace(tempDir) ? Path.GetTempPath() : tempDir,
-            $"st_{job.Id:N}{Path.GetExtension(job.OriginalFileName)}");
+            $"st_{job.Id:N}_{Guid.NewGuid():N}{Path.GetExtension(job.OriginalFileName)}");
 
         try
         {
@@ -146,7 +148,7 @@ public sealed class TranscriptionPipeline(
             logger.LogInformation("Job {JobId} done via {Transcriber}: {Count} segments",
                 job.Id, transcriber.Name, result.Segments.Count);
             ExportForIg(job, result.Segments);
-            await ExtractFramesAsync(job, localPath, ct);
+            await ExtractFramesAsync(job, localPath, probedMeta, ct);
             await AutoSummarizeAsync(job, result.Segments, ct);
             await AutoTagAsync(job, result.Segments, ct);
             await webhooks.NotifyJobFinishedAsync(job, ct);
@@ -356,9 +358,10 @@ public sealed class TranscriptionPipeline(
     private static readonly string[] VideoExtensions = [".mp4", ".webm", ".mkv", ".mov", ".avi"];
 
     /// <summary>Scene-detect key frames for video jobs → S3 + media_frames.</summary>
-    private async Task ExtractFramesAsync(TranscriptionJob job, string localPath, CancellationToken ct)
+    private async Task ExtractFramesAsync(TranscriptionJob job, string localPath, MediaMetadata? probedMeta, CancellationToken ct)
     {
         if (!options.Value.KeyFrames.Enabled
+            || probedMeta is { HasVideo: false }
             || !VideoExtensions.Contains(Path.GetExtension(job.OriginalFileName).ToLowerInvariant()))
         {
             return;
