@@ -50,6 +50,7 @@ class AcpProcess:
             stderr=subprocess.DEVNULL,
             text=True,
             bufsize=1,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         threading.Thread(target=self._read_loop, daemon=True).start()
         return self
