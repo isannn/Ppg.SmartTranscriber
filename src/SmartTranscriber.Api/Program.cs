@@ -17,6 +17,8 @@ builder.Configuration.AddJsonFile(
 builder.Configuration.AddEnvironmentVariables();
 
 builder.Services.AddControllers();
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+    o.MultipartBodyLengthLimit = 4L * 1024 * 1024 * 1024);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
