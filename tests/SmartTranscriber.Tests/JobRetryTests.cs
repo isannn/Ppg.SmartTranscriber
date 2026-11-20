@@ -140,7 +140,8 @@ public class JobRetryTests
             .BuildServiceProvider()
             .GetRequiredService<IServiceScopeFactory>();
         var svc = new JobService(repo, storage, queue, scopeFactory,
-            new FakeSegments(), new FakeWebhooks(), NullLogger<JobService>.Instance);
+            new FakeSegments(), new FakeWebhooks(), new JobCancellationRegistry(),
+            NullLogger<JobService>.Instance);
         return (svc, repo, queue);
     }
 

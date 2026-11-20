@@ -31,15 +31,36 @@ public sealed class TranscriptionPipeline(
     FfmpegAudioChunker audioChunker,
     IVoiceprintRepository voiceprints,
     IJobProgressSink progressSink,
+    JobCancellationRegistry cancellation,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
 {
     public async Task ProcessAsync(Guid jobId, CancellationToken ct = default)
     {
-        var job = await jobs.GetByIdAsync(jobId, ct);
+        var jobCts = cancellation.Register(jobId);
+        try
+        {
+            await ProcessCoreAsync(jobId, jobCts, ct);
+        }
+        finally
+        {
+            cancellation.Remove(jobId);
+        }
+    }
+
+    private async Task ProcessCoreAsync(Guid jobId, CancellationTokenSource jobCts, CancellationToken hostCt)
+    {
+        var job = await jobs.GetByIdAsync(jobId, hostCt);
         if (job is null)
         {
             logger.LogWarning("Job {JobId} not found, skipping", jobId);
+            return;
+        }
+
+        if (job.Status == JobStatus.Cancelled)
+        {
+            // cancelled between the claim and cts registration — nothing to do
+            logger.LogInformation("Job {JobId} already cancelled, skipping", jobId);
             return;
         }
 
@@ -54,6 +75,9 @@ public sealed class TranscriptionPipeline(
             progressSink.Report(job.Id, job.Progress, JobStatus.Failed);
             return;
         }
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(hostCt, jobCts.Token);
+        var ct = linkedCts.Token;
 
         var tempDir = options.Value.Worker.TempDir;
         // unique per attempt — a retried job must not collide with a file
@@ -165,7 +189,17 @@ public sealed class TranscriptionPipeline(
             await AutoTagAsync(job, result.Segments, ct);
             await webhooks.NotifyJobFinishedAsync(job, ct);
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (jobCts.IsCancellationRequested)
+        {
+            // user-initiated cancel — terminal, no rethrow
+            logger.LogInformation("Job {JobId} cancelled", jobId);
+            job.Status = JobStatus.Cancelled;
+            job.CompletedAt = DateTime.UtcNow;
+            await jobs.UpdateAsync(job, CancellationToken.None);
+            progressSink.Report(job.Id, job.Progress, JobStatus.Cancelled);
+            await webhooks.NotifyJobFinishedAsync(job, CancellationToken.None);
+        }
+        catch (OperationCanceledException) when (hostCt.IsCancellationRequested)
         {
             job.Status = JobStatus.Pending;
             await jobs.UpdateAsync(job, CancellationToken.None);

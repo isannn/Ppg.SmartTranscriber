@@ -38,7 +38,7 @@ else
                     <td>@job.OriginalFileName</td>
                     <td>
                         @job.Status
-                        @if (job.Status is not (nameof(JobStatus.Done) or nameof(JobStatus.Failed)))
+                        @if (job.Status is not (nameof(JobStatus.Done) or nameof(JobStatus.Failed) or nameof(JobStatus.Cancelled)))
                         {
                             <div class="progress" style="height:6px; min-width:90px">
                                 <div class="progress-bar" role="progressbar" style="width:@job.Progress%"></div>
@@ -59,9 +59,13 @@ else
                         {
                             <a class="btn btn-sm btn-primary" href="/jobs/@job.Id">View</a>
                         }
-                        @if (job.Status == nameof(JobStatus.Failed))
+                        @if (job.Status is nameof(JobStatus.Failed) or nameof(JobStatus.Cancelled))
                         {
                             <button class="btn btn-sm btn-outline-warning" @onclick="() => RetryAsync(job.Id)">Retry</button>
+                        }
+                        @if (job.Status is nameof(JobStatus.Pending) or nameof(JobStatus.Downloading) or nameof(JobStatus.Processing))
+                        {
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelAsync(job.Id)">Cancel</button>
                         }
                     </td>
                 </tr>
@@ -91,7 +95,7 @@ else
             await _hub.StartAsync();
             if (_jobs is not null)
             {
-                foreach (var j in _jobs.Where(j => j.Status is not ("Done" or "Failed")))
+                foreach (var j in _jobs.Where(j => j.Status is not ("Done" or "Failed" or "Cancelled")))
                 {
                     await _hub.InvokeAsync("JoinJob", j.Id.ToString());
                 }
@@ -129,6 +133,12 @@ else
     private async Task RetryAsync(Guid id)
     {
         await JobService.RetryJobAsync(id);
+        await LoadAsync();
+    }
+
+    private async Task CancelAsync(Guid id)
+    {
+        await JobService.CancelJobAsync(id);
         await LoadAsync();
     }
 

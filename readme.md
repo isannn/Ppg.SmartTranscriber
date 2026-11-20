@@ -39,6 +39,7 @@ Two shapes from one codebase:
 | GET | `/api/v1/jobs` | list jobs (`?status=&limit=&offset=`) |
 | GET | `/api/v1/jobs/{id}` | job detail |
 | DELETE | `/api/v1/jobs/{id}` | delete job (`?deleteFile=true`) |
+| POST | `/api/v1/jobs/{id}/cancel` | cancel a live job → Cancelled (cooperative) |
 | GET | `/api/v1/jobs/{id}/segments` | timestamped segments |
 | PUT | `/api/v1/segments/{id}/speaker` | rename speaker |
 | GET | `/api/v1/jobs/{id}/transcript?format=txt|json` | rendered transcript |

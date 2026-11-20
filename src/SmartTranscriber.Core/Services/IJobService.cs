@@ -14,10 +14,16 @@ public interface IJobService
     Task<bool> DeleteJobAsync(Guid id, bool deleteFile, CancellationToken ct = default);
     Task<(Stream Stream, string ObjectName)?> DownloadMediaAsync(Guid id, CancellationToken ct = default);
     /// <summary>
-    /// Requeues a Failed job. Jobs that failed during URL ingest are
-    /// sent back through the download instead (no media was ever stored).
+    /// Requeues a Failed or Cancelled job. Jobs that failed during URL
+    /// ingest are sent back through the download instead (no media was
+    /// ever stored).
     /// </summary>
     Task<RetryOutcome> RetryJobAsync(Guid id, CancellationToken ct = default);
+    /// <summary>
+    /// Marks a live job Cancelled and signals in-flight work to stop.
+    /// Null = unknown id, false = already in a terminal status.
+    /// </summary>
+    Task<bool?> CancelJobAsync(Guid id, CancellationToken ct = default);
     Task<JobDto?> RetranscribeAsync(Guid id, string? model, string? language, bool? diarize, string? hotwords = null, CancellationToken ct = default);
     Task<IReadOnlyList<(Guid Id, bool Ok, string Detail)>> BulkAsync(string action, IReadOnlyList<Guid> ids, CancellationToken ct = default);
     Task<JobStatsDto> GetStatsAsync(CancellationToken ct = default);
