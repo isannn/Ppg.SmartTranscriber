@@ -1,6 +1,6 @@
 # FR-063: Retry of failed URL-ingest jobs re-ingests media
 
-- Status: Draft
+- Status: Approved
 - Jira: ST-64
 - Branch: `features/FR-063-url-ingest-retry`
 
