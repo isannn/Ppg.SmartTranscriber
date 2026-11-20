@@ -86,7 +86,7 @@ public sealed class JobService(
         var job = new TranscriptionJob
         {
             Id = Guid.NewGuid(),
-            ObjectName = $"url/{Guid.NewGuid():N}",
+            ObjectName = $"{TranscriptionJob.UrlObjectPrefix}{Guid.NewGuid():N}",
             OriginalFileName = url,
             Status = JobStatus.Downloading,
             Progress = 2,
@@ -226,8 +226,15 @@ public sealed class JobService(
                         results.Add((id, await DeleteJobAsync(id, deleteFile: true, ct), "deleted"));
                         break;
                     case "retry":
-                        var retried = await RetryJobAsync(id, ct);
-                        results.Add((id, retried == true, retried is null ? "not found" : retried == false ? "not Failed" : "queued"));
+                        var outcome = await RetryJobAsync(id, ct);
+                        results.Add((id, outcome is RetryOutcome.Queued or RetryOutcome.Reingesting,
+                            outcome switch
+                            {
+                                RetryOutcome.NotFound => "not found",
+                                RetryOutcome.NotFailed => "not Failed",
+                                RetryOutcome.Reingesting => "reingesting",
+                                _ => "queued"
+                            }));
                         break;
                     default:
                         results.Add((id, false, $"unknown action {action}"));
@@ -266,16 +273,30 @@ public sealed class JobService(
         return new CompareDto(Map(jobA), Map(jobB), rows);
     }
 
-    public async Task<bool?> RetryJobAsync(Guid id, CancellationToken ct = default)
+    public async Task<RetryOutcome> RetryJobAsync(Guid id, CancellationToken ct = default)
     {
         var job = await jobs.GetByIdAsync(id, ct);
         if (job is null)
         {
-            return null;
+            return RetryOutcome.NotFound;
         }
         if (job.Status != JobStatus.Failed)
         {
-            return false;
+            return RetryOutcome.NotFailed;
+        }
+        // ingest placeholder — the download never completed, so there is
+        // no media to transcribe; send the job back through URL ingest
+        // instead of letting the pipeline fail on a missing object
+        if (job.ObjectName.StartsWith(TranscriptionJob.UrlObjectPrefix, StringComparison.Ordinal))
+        {
+            var url = job.OriginalFileName;
+            job.Status = JobStatus.Downloading;
+            job.Progress = 2;
+            job.ErrorMessage = null;
+            job.CompletedAt = null;
+            await jobs.UpdateAsync(job, ct);
+            _ = Task.Run(() => IngestUrlAsync(job.Id, url));
+            return RetryOutcome.Reingesting;
         }
         job.Status = JobStatus.Pending;
         job.Progress = 5;
@@ -283,7 +304,7 @@ public sealed class JobService(
         job.CompletedAt = null;
         await jobs.UpdateAsync(job, ct);
         await queue.EnqueueAsync(id, ct);
-        return true;
+        return RetryOutcome.Queued;
     }
 
     /// <summary>S3 object keys: brackets/spaces break GetObject on rustfs — keep [A-Za-z0-9._-].</summary>
