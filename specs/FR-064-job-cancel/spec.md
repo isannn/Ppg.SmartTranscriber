@@ -1,6 +1,6 @@
 # FR-064: Job cancellation endpoint
 
-- Status: Draft
+- Status: Approved
 - Jira: ST-65
 - Branch: `features/FR-064-job-cancel`
 
