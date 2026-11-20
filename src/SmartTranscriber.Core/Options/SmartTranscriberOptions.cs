@@ -54,8 +54,11 @@ public sealed class SttOptions
 
 public sealed class LlmOptions
 {
-    /// <summary>Primary: tools/llm_bridge (devin acp) loopback URL.</summary>
-    public string BridgeUrl { get; set; } = "http://127.0.0.1:8464";
+    /// <summary>Primary: shared devin-openai gateway (devin acp) URL.</summary>
+    public string BridgeUrl { get; set; } = "http://127.0.0.1:8465";
+
+    /// <summary>Bearer key for the devin-openai gateway — env only.</summary>
+    public string BridgeApiKey { get; set; } = "";
 
     /// <summary>Fallback: OpenAI-compatible endpoint (OpenRouter free models).</summary>
     public string BaseUrl { get; set; } = "https://openrouter.ai/api/v1";
