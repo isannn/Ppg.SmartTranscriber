@@ -88,7 +88,11 @@ tests/                            NUnit
 - Config — `smarttranscriber.json` (ports, endpoints); secrets via env
   only (`SMARTTRANSCRIBER__ConnectionString`, Npgsql key-value format,
   NOT a `postgres://` URI; `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`,
-  `HF_TOKEN` for the sidecar)
+  `HF_TOKEN` for the sidecar). FR-062: the Api host pulls
+  `SMARTTRANSCRIBER__*` secrets from Infisical at startup when
+  `INFISICAL_TOKEN`/`INFISICAL_PROJECT_ID` are set (fail-fast on fetch
+  errors); unset → local env fallback. See
+  `specs/FR-062-infisical-secrets/` and `D:\projects\selfhosted\infisical`.
 - Schema changes — DbUp migrations only (`db/Migrations/`), roll-forward only
 - Verification: `dotnet build` + NUnit; sidecar `python -m py_compile`
   + `/health` smoke
