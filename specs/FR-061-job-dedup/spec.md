@@ -1,6 +1,6 @@
 # FR-061 — Job deduplication (URL + content hash)
 
-Status: Draft
+Status: Approved (2026-11-27)
 
 Jira: ST-62
 
@@ -31,7 +31,7 @@ Two dedup levels:
 | FR-061.3 | `CreateUrlJobAsync` normalizes the URL, stores it in `source_url`. If a live (non-`Failed`) job already owns that `source_url`: (a) canonical `Done` → the new request clones its results into a new job (see FR-061.5) — every submission gets its own job row; (b) canonical in-flight (`Downloading`/`Pending`/`Processing`) → the API returns the existing job with `duplicate: true`, no new row. Canonical `Failed` → treated as no match, a fresh job is created and re-claims the URL. |
 | FR-061.4 | The unique index is the race guard for URL dedup: on a 23505 unique violation the service re-reads the existing row and applies the same (a)/(b) rule instead of erroring. |
 | FR-061.5 | **Result clone**: a new job row that inherits `ObjectName` (shared S3 object), `DurationSeconds`, `MediaMeta`, `Model`, `Language`, `Summary`, `Translation`/`TranslationLang` and a copy of all `TranscriptSegments` (new rows, new `job_id`); `Status = Done`, `Progress = 100`, `CompletedAt = now`, `content_hash` copied, `source_url` = the submitted normalized URL (or NULL when it is already claimed). Request params (`CallbackUrl`, `Hotwords`, `Priority`, `Tags`) stay on the new job; its own webhook fires on completion. |
-| FR-061.6 | **Content hash**: SHA-256 (lowercase hex) is computed for every ingested file — URL jobs after `IMediaFetcher.FetchAsync` (before S3 upload) and direct uploads while the request stream is spooled to the temp file. If a `Done` job with the same `content_hash` exists and its `Hotwords`/`Diarize` match the request, the new job clones results per FR-061.5 (URL jobs skip the S3 upload entirely; upload jobs skip the already-spooled upload). Otherwise the job proceeds normally with `content_hash` recorded. Content matches on in-flight or `Failed` jobs do not dedup — the job proceeds normally. |
+| FR-061.6 | **Content hash**: SHA-256 (lowercase hex) is computed for every ingested file — URL jobs after `IMediaFetcher.FetchAsync` (before S3 upload) and direct uploads while the request stream is spooled to the temp file. If a `Done` job with the same `content_hash` exists, the new job clones results per FR-061.5 (hash is the only dedup key — request params like `Hotwords`/`Diarize` do not affect the match) (URL jobs skip the S3 upload entirely; upload jobs skip the already-spooled upload). Otherwise the job proceeds normally with `content_hash` recorded. Content matches on in-flight or `Failed` jobs do not dedup — the job proceeds normally. |
 | FR-061.7 | `DeleteJobAsync(deleteFile: true)` skips the S3 delete when another job row still references the same `ObjectName` (shared artifact safety). |
 | FR-061.8 | API contract: `POST /from-url` returns `202 Accepted {id, status}` for a genuinely new job as today; `200 OK {id, status, duplicate: true, duplicateOf}` when it resolves to an existing/derived result. Same `duplicate`/`duplicateOf` fields on `JobDto` so UI/CLI can surface "duplicate of <id>". |
 | FR-061.9 | Retry of a `Failed` job is unchanged; if its `source_url` has since been claimed by a live job, the retried job clears its own `source_url` (keeps its artifact) to satisfy the unique index. |
@@ -69,10 +69,12 @@ Two dedup levels:
   canonical job still references it.
 - Migration applies cleanly on the dev `db_smarttranscriber` via DbUp.
 
-## Open decisions (to confirm at spec approval)
+## Decisions (confirmed at approval)
 
 - In-flight URL hit returns the existing job (`duplicate: true`) rather
   than registering the new request's own callback/tags — per-request
   webhooks do not fire for that case.
-- Content-dedup requires matching `Hotwords`+`Diarize`; `Priority`,
-  `Tags`, `CallbackUrl` do not affect transcript identity.
+- Content-dedup key is `content_hash` only — request params
+  (`Hotwords`, `Diarize`, `Priority`, `Tags`, `CallbackUrl`) do not
+  affect the match; a resubmission with different params still clones
+  the existing transcript.
