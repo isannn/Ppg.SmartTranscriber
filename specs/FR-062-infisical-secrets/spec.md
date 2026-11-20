@@ -42,8 +42,9 @@ a `/smarttranscriber` secret folder, and a read-only machine identity
   (`SMARTTRANSCRIBER__Minio__AccessKey`); `__` is normalized to `:`.
 - **FR-062.4** Absent bootstrap vars → loader is a no-op (local dev keeps
   working on `.env` alone). Fetch failure (timeout, HTTP error, bad JSON) →
-  `LogWarning` and continue with env/JSON config — Infisical is NOT a hard
-  dependency (fail-open).
+  `LogError` and abort startup — **fail-fast**: when Infisical is configured
+  it is the single source of truth; a service running on stale `.env` copies
+  is worse than a refused start.
 - **FR-062.5** Startup log states whether Infisical secrets were loaded and
   how many keys arrived. Secret values are never logged.
 - **FR-062.6** Loader lives in `SmartTranscriber.Infrastructure`
@@ -65,7 +66,7 @@ a `/smarttranscriber` secret folder, and a read-only machine identity
 
 - `dotnet build` clean; NUnit green including new loader tests
   (stub `HttpMessageHandler`: parse + `__`→`:` normalization,
-  HTTP failure → empty result + no throw).
+  HTTP failure → abort via exception).
 - Live smoke: API on :8460 starts with only `INFISICAL_*` env (no
   `SMARTTRANSCRIBER__*` in env) and works — proving secrets came from
   Infisical.
