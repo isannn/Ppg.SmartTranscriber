@@ -1,6 +1,6 @@
 # FR-062: Infisical secrets bootstrap
 
-- Status: Draft
+- Status: Approved
 - Jira: ST-63
 - Branch: `features/FR-062-infisical-secrets`
 
@@ -69,8 +69,9 @@ a `/smarttranscriber` secret folder, and a read-only machine identity
 - Live smoke: API on :8460 starts with only `INFISICAL_*` env (no
   `SMARTTRANSCRIBER__*` in env) and works — proving secrets came from
   Infisical.
-- Live negative smoke: API still starts with a bad/unreachable
-  `INFISICAL_URL` when local env secrets are present (fail-open).
+- Live negative smoke: with a bad/unreachable `INFISICAL_URL` and
+  `INFISICAL_TOKEN` set, the API refuses to start (fail-fast) and the
+  log names the failure reason without leaking secret values.
 - `readme`/`AGENTS.md` or spec documents the `INFISICAL_*` contract and
   identity scope; `selfhosted/infisical/identities.md` notes that the
   `smarttranscriber` identity is now consumed by the API host.
