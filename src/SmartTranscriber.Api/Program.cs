@@ -8,6 +8,7 @@ using SmartTranscriber.Api.Services;
 using SmartTranscriber.Core.Options;
 using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Infrastructure;
+using SmartTranscriber.Infrastructure.Infisical;
 using SmartTranscriber.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile(
     SmartTranscriber.Core.Config.JsonConfigLocator.Locate(), optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
+var infisicalKeyCount = await builder.Configuration.AddInfisicalSecretsAsync();
 
 builder.Services.AddControllers();
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
@@ -35,6 +37,15 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<IJobProgressSink, SignalRJobProgressSink>();
 
 var app = builder.Build();
+if (infisicalKeyCount is { } infisicalCount)
+{
+    app.Logger.LogInformation(
+        "Secrets source: Infisical ({Count} keys loaded)", infisicalCount);
+}
+else
+{
+    app.Logger.LogInformation("Secrets source: environment variables");
+}
 
 var connectionString = builder.Configuration.GetSection("SmartTranscriber")["ConnectionString"];
 if (!string.IsNullOrWhiteSpace(connectionString))

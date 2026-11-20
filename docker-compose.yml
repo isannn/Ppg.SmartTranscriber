@@ -21,6 +21,13 @@ services:
       SmartTranscriber__Llm__BridgeUrl: "http://host.docker.internal:8465"
       SmartTranscriber__Llm__BridgeApiKey: "${DEVIN_OPENAI_API_KEY:-}"
       SmartTranscriber__Llm__ApiKey: "${OPENROUTER_API_KEY:-}"
+      # Infisical bootstrap (FR-062): when set, secrets come from Infisical
+      # /smarttranscriber at startup and override the env above (fail-fast).
+      INFISICAL_URL: "${INFISICAL_URL:-http://host.docker.internal:8464}"
+      INFISICAL_PROJECT_ID: "${INFISICAL_PROJECT_ID:-}"
+      INFISICAL_TOKEN: "${INFISICAL_TOKEN:-}"
+      INFISICAL_ENV: "${INFISICAL_ENV:-prod}"
+      INFISICAL_SECRET_PATH: "${INFISICAL_SECRET_PATH:-/smarttranscriber}"
     depends_on:
       s3:
         condition: service_healthy
