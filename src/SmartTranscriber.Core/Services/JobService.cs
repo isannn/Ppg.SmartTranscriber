@@ -14,6 +14,7 @@ public sealed class JobService(
     IServiceScopeFactory services,
     ISegmentRepository segments,
     IWebhookNotifier webhooks,
+    JobCancellationRegistry cancellation,
     ILogger<JobService> logger) : IJobService
 {
     public async Task<JobDto> CreateJobAsync(string fileName, Stream content, string contentType, string? callbackUrl = null, string? hotwords = null, int priority = 0, CancellationToken ct = default)
@@ -103,6 +104,7 @@ public sealed class JobService(
     /// <summary>Background: fetch media, upload to S3, mark Pending+enqueue or Failed.</summary>
     private async Task IngestUrlAsync(Guid jobId, string url)
     {
+        var jobCts = cancellation.Register(jobId);
         try
         {
             using var scope = services.CreateScope();
@@ -111,24 +113,24 @@ public sealed class JobService(
             var fetcher = scope.ServiceProvider.GetRequiredService<IMediaFetcher>();
             var jobQueue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
 
-            var job = await repo.GetByIdAsync(jobId) ?? throw new InvalidOperationException("job gone");
+            var job = await repo.GetByIdAsync(jobId, jobCts.Token) ?? throw new InvalidOperationException("job gone");
             var dir = Path.Combine(Path.GetTempPath(), $"st-yt-{jobId:N}");
             Directory.CreateDirectory(dir);
             try
             {
-                var file = await fetcher.FetchAsync(url, dir);
+                var file = await fetcher.FetchAsync(url, dir, jobCts.Token);
                 var objectName = $"{jobId:N}_{SafeName(Path.GetFileName(file))}";
                 await using (var fs = File.OpenRead(file))
                 {
-                    await store.UploadAsync(objectName, fs, "application/octet-stream");
+                    await store.UploadAsync(objectName, fs, "application/octet-stream", jobCts.Token);
                 }
                 // rustfs commits asynchronously — PutObject 200 precedes a statable object;
                 // a Pending job would be claimed and fail StatObject within that window
-                for (var i = 0; i < 20 && !await store.ExistsAsync(objectName); i++)
+                for (var i = 0; i < 20 && !await store.ExistsAsync(objectName, jobCts.Token); i++)
                 {
-                    await Task.Delay(500);
+                    await Task.Delay(500, jobCts.Token);
                 }
-                if (!await store.ExistsAsync(objectName))
+                if (!await store.ExistsAsync(objectName, jobCts.Token))
                 {
                     throw new InvalidOperationException("uploaded object not visible in storage");
                 }
@@ -136,13 +138,19 @@ public sealed class JobService(
                 job.OriginalFileName = Path.GetFileName(file);
                 job.Status = JobStatus.Pending;
                 job.Progress = 5;
-                await repo.UpdateAsync(job);
-                await jobQueue.EnqueueAsync(jobId);
+                await repo.UpdateAsync(job, jobCts.Token);
+                await jobQueue.EnqueueAsync(jobId, jobCts.Token);
             }
             finally
             {
                 try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
             }
+        }
+        catch (OperationCanceledException) when (jobCts.IsCancellationRequested)
+        {
+            // cancelled via the API — the row is already Cancelled and
+            // every write used the cancelled token, so nothing landed
+            logger.LogInformation("URL ingest cancelled for job {JobId}", jobId);
         }
         catch (Exception ex)
         {
@@ -165,6 +173,10 @@ public sealed class JobService(
             {
                 logger.LogError(inner, "failed to mark URL-ingest job {JobId} as Failed", jobId);
             }
+        }
+        finally
+        {
+            cancellation.Remove(jobId);
         }
     }
 
@@ -280,7 +292,7 @@ public sealed class JobService(
         {
             return RetryOutcome.NotFound;
         }
-        if (job.Status != JobStatus.Failed)
+        if (job.Status is not (JobStatus.Failed or JobStatus.Cancelled))
         {
             return RetryOutcome.NotFailed;
         }
@@ -305,6 +317,27 @@ public sealed class JobService(
         await jobs.UpdateAsync(job, ct);
         await queue.EnqueueAsync(id, ct);
         return RetryOutcome.Queued;
+    }
+
+    /// <summary>Marks a live job Cancelled and signals in-flight work to stop.</summary>
+    public async Task<bool?> CancelJobAsync(Guid id, CancellationToken ct = default)
+    {
+        var job = await jobs.GetByIdAsync(id, ct);
+        if (job is null)
+        {
+            return null;
+        }
+        if (job.Status is JobStatus.Done or JobStatus.Failed or JobStatus.Cancelled)
+        {
+            return false;
+        }
+        job.Status = JobStatus.Cancelled;
+        job.CompletedAt = DateTime.UtcNow;
+        await jobs.UpdateAsync(job, ct);
+        cancellation.TryCancel(id);
+        await webhooks.NotifyJobFinishedAsync(job, ct);
+        logger.LogInformation("Job {JobId} cancelled", id);
+        return true;
     }
 
     /// <summary>S3 object keys: brackets/spaces break GetObject on rustfs — keep [A-Za-z0-9._-].</summary>

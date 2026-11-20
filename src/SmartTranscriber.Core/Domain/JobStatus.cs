@@ -6,5 +6,6 @@ public enum JobStatus
     Downloading,
     Processing,
     Done,
-    Failed
+    Failed,
+    Cancelled
 }

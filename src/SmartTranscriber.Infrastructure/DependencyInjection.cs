@@ -78,6 +78,7 @@ public static class DependencyInjection
         services.AddSmartTranscriberStt();
 
         services.AddSingleton<IJobQueue, JobQueue>();
+        services.AddSingleton<JobCancellationRegistry>();
         services.AddSingleton<SmartTranscriber.Infrastructure.Live.LiveSessionManager>();
         services.AddHostedService<LiveTranscriptionWorker>();
         services.AddScoped<IJobRepository, JobRepository>();

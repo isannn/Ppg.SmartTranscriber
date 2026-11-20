@@ -79,6 +79,7 @@ public static class Program
               smarttranscriber api deliveries [--job ID] [--limit N]
               smarttranscriber api voiceprints
               smarttranscriber api retry <id>
+              smarttranscriber api cancel <id>
               smarttranscriber api frames <id>
                   Talk to the API service (default http://127.0.0.1:8460).
               smarttranscriber db migrate
@@ -189,6 +190,7 @@ file static class ApiCommand
             "url" => await UrlAsync(http, args[1..]),
             "rename" => await RenameAsync(http, args[1..]),
             "retry" => await RetryAsync(http, args[1..]),
+            "cancel" => await CancelAsync(http, args[1..]),
             "frames" => await FramesAsync(http, args[1..]),
             "merge" => await MergeAsync(http, args[1..]),
             "segment-text" => await SegmentTextAsync(http, args[1..]),
@@ -360,6 +362,19 @@ file static class ApiCommand
             return 2;
         }
         var response = await http.PostAsync($"api/v1/jobs/{id}/retry", null);
+        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.IsSuccessStatusCode ? 0 : 1;
+    }
+
+    private static async Task<int> CancelAsync(HttpClient http, string[] args)
+    {
+        var id = args.FirstOrDefault(a => !a.StartsWith('-'));
+        if (id is null)
+        {
+            Console.Error.WriteLine("usage: api cancel <id>");
+            return 2;
+        }
+        var response = await http.PostAsync($"api/v1/jobs/{id}/cancel", null);
         Console.WriteLine(await response.Content.ReadAsStringAsync());
         return response.IsSuccessStatusCode ? 0 : 1;
     }

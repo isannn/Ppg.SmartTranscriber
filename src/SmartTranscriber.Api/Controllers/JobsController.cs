@@ -102,6 +102,22 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     }
 
     /// <summary>
+    /// Cancels a Pending/Downloading/Processing job — cooperative, stops
+    /// at the next checkpoint. 400 when already terminal, 404 unknown id.
+    /// </summary>
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid id, CancellationToken ct)
+    {
+        var result = await jobs.CancelJobAsync(id, ct);
+        return result switch
+        {
+            null => NotFound(),
+            false => BadRequest(new { error = "job is already in a terminal status" }),
+            _ => Ok(new { id, status = "Cancelled" })
+        };
+    }
+
+    /// <summary>
     /// Bulk speaker rename across all segments of the job.
     /// </summary>
     [HttpPost("{id:guid}/speakers/rename")]
