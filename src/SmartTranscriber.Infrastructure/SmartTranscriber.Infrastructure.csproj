@@ -26,4 +26,7 @@
     <EmbeddedResource Include="..\..\db\Migrations\*.sql" LogicalName="SmartTranscriber.db.%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmartTranscriber.Tests" />
+  </ItemGroup>
 </Project>
