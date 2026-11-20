@@ -43,6 +43,18 @@ public sealed class TranscriptionPipeline(
             return;
         }
 
+        if (job.ObjectName.StartsWith(TranscriptionJob.UrlObjectPrefix, StringComparison.Ordinal))
+        {
+            // ingest placeholder — media was never uploaded; fail with a
+            // clear reason instead of a raw storage ObjectNotFoundException
+            job.Status = JobStatus.Failed;
+            job.ErrorMessage = "job has no media object — retry to re-download";
+            job.CompletedAt = DateTime.UtcNow;
+            await jobs.UpdateAsync(job, CancellationToken.None);
+            progressSink.Report(job.Id, job.Progress, JobStatus.Failed);
+            return;
+        }
+
         var tempDir = options.Value.Worker.TempDir;
         // unique per attempt — a retried job must not collide with a file
         // still held by the previous run's ffmpeg/sidecar

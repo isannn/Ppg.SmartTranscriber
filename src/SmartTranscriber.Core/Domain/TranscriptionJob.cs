@@ -2,6 +2,14 @@ namespace SmartTranscriber.Core.Domain;
 
 public class TranscriptionJob
 {
+    /// <summary>
+    /// ObjectName prefix marking the placeholder assigned by
+    /// <c>CreateUrlJobAsync</c> — present until URL ingest replaces it with
+    /// the real uploaded object key. A job still carrying it has no media
+    /// in storage.
+    /// </summary>
+    public const string UrlObjectPrefix = "url/";
+
     public Guid Id { get; set; }
     public string ObjectName { get; set; } = "";
     public string OriginalFileName { get; set; } = "";

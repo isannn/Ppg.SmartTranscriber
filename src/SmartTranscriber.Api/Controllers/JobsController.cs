@@ -84,7 +84,9 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
     }
 
     /// <summary>
-    /// Requeues a Failed job (media object is reused). 409 for non-Failed.
+    /// Requeues a Failed job (media object is reused). Jobs that failed
+    /// during URL ingest are sent back through the download instead.
+    /// 409 for non-Failed.
     /// </summary>
     [HttpPost("{id:guid}/retry")]
     public async Task<IActionResult> Retry(Guid id, CancellationToken ct)
@@ -92,8 +94,9 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
         var result = await jobs.RetryJobAsync(id, ct);
         return result switch
         {
-            null => NotFound(),
-            false => Conflict(new { error = "job is not in Failed status" }),
+            RetryOutcome.NotFound => NotFound(),
+            RetryOutcome.NotFailed => Conflict(new { error = "job is not in Failed status" }),
+            RetryOutcome.Reingesting => Accepted(new { id, status = "Downloading" }),
             _ => Accepted(new { id, status = "Pending" })
         };
     }
