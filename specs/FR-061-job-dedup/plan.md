@@ -1,6 +1,6 @@
 # FR-061 — Plan: job deduplication
 
-Status: Draft
+Status: Approved (2026-11-27)
 
 Spec: `specs/FR-061-job-dedup/spec.md` (Approved). Jira: ST-62.
 
