@@ -57,7 +57,9 @@ public class JobsController(IJobService jobs, ITranscriptService transcripts) : 
             return BadRequest(new { error = "url required" });
         }
         var job = await jobs.CreateUrlJobAsync(request.Url, request.CallbackUrl, request.Hotwords, request.Priority, ct);
-        return Accepted(new { job.Id, job.Status });
+        return job.DuplicateOf is not null
+            ? Ok(new { job.Id, job.Status, duplicate = true, duplicateOf = job.DuplicateOf })
+            : Accepted(new { job.Id, job.Status });
     }
 
     public sealed record UrlRequest(string Url, string? CallbackUrl = null, string? Hotwords = null, int Priority = 0);

@@ -18,15 +18,9 @@ public sealed class JobService(
 {
     public async Task<JobDto> CreateJobAsync(string fileName, Stream content, string contentType, string? callbackUrl = null, string? hotwords = null, int priority = 0, CancellationToken ct = default)
     {
-        var objectName = $"{Guid.NewGuid():N}_{SafeName(Path.GetFileName(fileName))}";
-
-        await storage.EnsureBucketAsync(ct);
-        await storage.UploadAsync(objectName, content, contentType, ct);
-
         var job = new TranscriptionJob
         {
             Id = Guid.NewGuid(),
-            ObjectName = objectName,
             OriginalFileName = Path.GetFileName(fileName),
             Status = JobStatus.Pending,
             CreatedAt = DateTime.UtcNow,
@@ -34,11 +28,118 @@ public sealed class JobService(
             Hotwords = hotwords,
             Priority = priority
         };
+
+        // Spool to a temp file so the hash is known before the S3 upload
+        // — a content hit skips the upload and the transcription.
+        var tmp = Path.Combine(Path.GetTempPath(), $"st-up-{job.Id:N}");
+        try
+        {
+            await using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20, useAsync: true))
+            {
+                job.ContentHash = await CopyAndHashAsync(content, fs, ct);
+            }
+
+            var canonical = await jobs.FindDoneByContentHashAsync(job.ContentHash, job.Id, ct);
+            if (canonical is not null)
+            {
+                await CloneResultsAsync(jobs, segments, webhooks, canonical, job, insert: true, ct);
+                logger.LogInformation("Job {JobId} for {FileName} clones done job {CanonicalId} (content hash match)",
+                    job.Id, fileName, canonical.Id);
+                return Map(job);
+            }
+
+            job.ObjectName = $"{Guid.NewGuid():N}_{SafeName(job.OriginalFileName)}";
+            await storage.EnsureBucketAsync(ct);
+            await using (var fs = File.OpenRead(tmp))
+            {
+                await storage.UploadAsync(job.ObjectName, fs, contentType, ct);
+            }
+        }
+        finally
+        {
+            try { File.Delete(tmp); } catch { /* best effort */ }
+        }
+
         await jobs.AddAsync(job, ct);
         await queue.EnqueueAsync(job.Id, ct);
 
         logger.LogInformation("Created transcription job {JobId} for {FileName}", job.Id, fileName);
         return Map(job);
+    }
+
+    /// <summary>
+    /// Turns <paramref name="job"/> into a Done clone of
+    /// <paramref name="canonical"/>: shared storage object, copied
+    /// transcript/meta/summary. The row is persisted as Done (insert
+    /// or update), segments are copied after, then the job's own
+    /// webhook fires — matching the normal completion path.
+    /// </summary>
+    private static async Task CloneResultsAsync(
+        IJobRepository repo, ISegmentRepository segs, IWebhookNotifier hooks,
+        TranscriptionJob canonical, TranscriptionJob job, bool insert, CancellationToken ct)
+    {
+        job.ObjectName = canonical.ObjectName;
+        job.ContentHash = canonical.ContentHash;
+        job.DurationSeconds = canonical.DurationSeconds;
+        job.MediaMeta = canonical.MediaMeta;
+        job.Model = canonical.Model;
+        job.Language = canonical.Language;
+        job.Summary = canonical.Summary;
+        job.Translation = canonical.Translation;
+        job.TranslationLang = canonical.TranslationLang;
+        job.DuplicateOf = canonical.Id;
+        job.Status = JobStatus.Done;
+        job.Progress = 100;
+        job.CompletedAt = DateTime.UtcNow;
+        job.ErrorMessage = null;
+
+        if (insert)
+        {
+            await repo.AddAsync(job, ct);
+        }
+        else
+        {
+            await repo.UpdateAsync(job, ct);
+        }
+
+        var copied = (await segs.GetByJobAsync(canonical.Id, ct)).Select(s => new TranscriptSegment
+        {
+            JobId = job.Id,
+            StartTime = s.StartTime,
+            EndTime = s.EndTime,
+            Speaker = s.Speaker,
+            Text = s.Text,
+            Confidence = s.Confidence
+        }).ToList();
+        if (copied.Count > 0)
+        {
+            await segs.AddRangeAsync(copied, ct);
+        }
+        job.SegmentCount = copied.Count;
+        job.Segments = copied;
+
+        await hooks.NotifyJobFinishedAsync(job);
+    }
+
+    private static async Task<string> HashFileAsync(string path)
+    {
+        await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, useAsync: true);
+        var hash = await System.Security.Cryptography.SHA256.HashDataAsync(fs);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static async Task<string> CopyAndHashAsync(Stream source, Stream destination, CancellationToken ct)
+    {
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var buffer = new byte[1 << 20];
+        int read;
+        while ((read = await source.ReadAsync(buffer, ct)) > 0)
+        {
+            sha.TransformBlock(buffer, 0, read, null, 0);
+            await destination.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
+        sha.TransformFinalBlock([], 0, 0);
+        return Convert.ToHexString(sha.Hash!).ToLowerInvariant();
     }
 
     public async Task<JobDto?> GetJobAsync(Guid id, CancellationToken ct = default)
@@ -73,8 +174,18 @@ public sealed class JobService(
 
         if (deleteFile)
         {
-            try { await storage.DeleteAsync(job.ObjectName, ct); }
-            catch (Exception ex) { logger.LogWarning(ex, "Failed to delete object {ObjectName}", job.ObjectName); }
+            // Clones share the canonical job's object — delete the file
+            // only when no other job still references it.
+            var refs = await jobs.CountByObjectNameAsync(job.ObjectName, id, ct);
+            if (refs > 0)
+            {
+                logger.LogInformation("Keeping shared object {ObjectName}: {Refs} other job(s) reference it", job.ObjectName, refs);
+            }
+            else
+            {
+                try { await storage.DeleteAsync(job.ObjectName, ct); }
+                catch (Exception ex) { logger.LogWarning(ex, "Failed to delete object {ObjectName}", job.ObjectName); }
+            }
         }
 
         await jobs.DeleteAsync(id, ct);
@@ -95,9 +206,37 @@ public sealed class JobService(
             Hotwords = hotwords,
             Priority = priority
         };
-        await jobs.AddAsync(job, ct);
-        _ = Task.Run(() => IngestUrlAsync(job.Id, url));
-        return Map(job);
+        try
+        {
+            job.SourceUrl = UrlNormalizer.Normalize(url);
+        }
+        catch (UriFormatException)
+        {
+            job.SourceUrl = null;
+        }
+
+        var owner = job.SourceUrl is null
+            ? (Job: job, Created: true)
+            : await jobs.GetOrAddUrlJobAsync(job, ct);
+        if (owner.Created)
+        {
+            _ = Task.Run(() => IngestUrlAsync(job.Id, url));
+            return Map(job);
+        }
+
+        var canonical = owner.Job;
+        if (canonical.Status == JobStatus.Done)
+        {
+            // The URL is owned by a finished job — clone its results into
+            // a fresh row so this request still gets its own job/webhook.
+            job.SourceUrl = null; // canonical keeps the live URL claim
+            await CloneResultsAsync(jobs, segments, webhooks, canonical, job, insert: true, ct);
+            logger.LogInformation("URL job {JobId} for {Url} clones done job {CanonicalId}", job.Id, url, canonical.Id);
+            return Map(job);
+        }
+
+        logger.LogInformation("URL {Url} already owned by in-flight job {CanonicalId}", url, canonical.Id);
+        return Map(canonical) with { DuplicateOf = canonical.Id };
     }
 
     /// <summary>Background: fetch media, upload to S3, mark Pending+enqueue or Failed.</summary>
@@ -117,6 +256,17 @@ public sealed class JobService(
             try
             {
                 var file = await fetcher.FetchAsync(url, dir);
+                job.ContentHash = await HashFileAsync(file);
+                var canonical = await repo.FindDoneByContentHashAsync(job.ContentHash, jobId);
+                if (canonical is not null)
+                {
+                    job.OriginalFileName = Path.GetFileName(file);
+                    var segs2 = scope.ServiceProvider.GetRequiredService<ISegmentRepository>();
+                    var hooks = scope.ServiceProvider.GetRequiredService<IWebhookNotifier>();
+                    await CloneResultsAsync(repo, segs2, hooks, canonical, job, insert: false, CancellationToken.None);
+                    logger.LogInformation("URL ingest job {JobId} clones done job {CanonicalId} (content hash match)", jobId, canonical.Id);
+                    return;
+                }
                 var objectName = $"{jobId:N}_{SafeName(Path.GetFileName(file))}";
                 await using (var fs = File.OpenRead(file))
                 {
@@ -277,6 +427,12 @@ public sealed class JobService(
         {
             return false;
         }
+        // A resubmission may have re-claimed this URL while the job sat
+        // Failed — the unique index only admits one live owner.
+        if (job.SourceUrl is not null && await jobs.FindUrlOwnerAsync(job.SourceUrl, id, ct) is not null)
+        {
+            job.SourceUrl = null;
+        }
         job.Status = JobStatus.Pending;
         job.Progress = 5;
         job.ErrorMessage = null;
@@ -300,7 +456,7 @@ public sealed class JobService(
         j.CreatedAt, j.CompletedAt, j.ErrorMessage, j.Model, j.Language,
         j.DurationSeconds, j.Summary, j.Progress, j.SegmentCount > 0 ? j.SegmentCount : j.Segments.Count,
         j.CallbackUrl, j.Priority, j.Tags, j.Translation, j.TranslationLang,
-        ParseMediaMeta(j.MediaMeta));
+        ParseMediaMeta(j.MediaMeta), j.SourceUrl, j.DuplicateOf);
 
     private static MediaMetaDto? ParseMediaMeta(string? json)
     {

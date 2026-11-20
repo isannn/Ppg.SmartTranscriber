@@ -30,6 +30,12 @@ public class TranscriptionJob
     public string? TranslationLang { get; set; }
     /// <summary>ffprobe container/stream metadata as JSON (camelCase).</summary>
     public string? MediaMeta { get; set; }
+    /// <summary>Normalized source URL for dedup (URL jobs only).</summary>
+    public string? SourceUrl { get; set; }
+    /// <summary>SHA-256 hex of the stored media bytes.</summary>
+    public string? ContentHash { get; set; }
+    /// <summary>Canonical job this one cloned results from.</summary>
+    public Guid? DuplicateOf { get; set; }
     public int SegmentCount { get; set; }
 
     public List<TranscriptSegment> Segments { get; set; } = new();

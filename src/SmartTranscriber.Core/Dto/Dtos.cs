@@ -21,7 +21,13 @@ public sealed record JobDto(
     string? Tags = null,
     string? Translation = null,
     string? TranslationLang = null,
-    MediaMetaDto? MediaMeta = null);
+    MediaMetaDto? MediaMeta = null,
+    string? SourceUrl = null,
+    Guid? DuplicateOf = null)
+{
+    /// <summary>True when this job resolved to earlier results instead of a fresh pipeline run.</summary>
+    public bool Duplicate => DuplicateOf is not null;
+}
 
 /// <summary>ffprobe container/stream metadata surfaced on jobs.</summary>
 public sealed record MediaMetaDto(
