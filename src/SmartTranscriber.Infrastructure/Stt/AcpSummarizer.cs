@@ -9,8 +9,8 @@ using SmartTranscriber.Core.Ports;
 namespace SmartTranscriber.Infrastructure.Stt;
 
 /// <summary>
-/// Summarizer over tools/llm_bridge — a loopback HTTP front that spawns
-/// `devin.exe acp` per request. Primary LLM provider.
+/// Summarizer over the shared devin-openai gateway — an OpenAI-compatible
+/// HTTP front over a persistent `devin.exe acp` process. Primary LLM provider.
 /// </summary>
 public sealed class AcpSummarizer(HttpClient http, IOptions<SmartTranscriberOptions> options) : IAvailableSummarizer
 {
@@ -46,17 +46,27 @@ public sealed class AcpSummarizer(HttpClient http, IOptions<SmartTranscriberOpti
             : request!.Prompt!;
         var prompt = instruction + "\n\n" + text;
 
-        var url = $"{llm.BridgeUrl.TrimEnd('/')}/chat";
-        using var response = await http.PostAsJsonAsync(url, new { prompt }, ct);
+        var url = $"{llm.BridgeUrl.TrimEnd('/')}/generate";
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = JsonContent.Create(new { prompt }),
+        };
+        if (!string.IsNullOrEmpty(llm.BridgeApiKey))
+        {
+            httpRequest.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", llm.BridgeApiKey);
+        }
+
+        using var response = await http.SendAsync(httpRequest, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException($"llm-bridge returned {(int)response.StatusCode}: {body}");
+            throw new InvalidOperationException($"devin-openai returned {(int)response.StatusCode}: {body}");
         }
 
         var parsed = await response.Content.ReadFromJsonAsync<BridgeResponse>(cancellationToken: ct);
         return string.IsNullOrWhiteSpace(parsed?.Text)
-            ? throw new InvalidOperationException("llm-bridge returned an empty summary")
+            ? throw new InvalidOperationException("devin-openai returned an empty summary")
             : parsed.Text.Trim();
     }
 
