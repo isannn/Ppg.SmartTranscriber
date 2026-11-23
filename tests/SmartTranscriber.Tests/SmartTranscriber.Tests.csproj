@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SmartTranscriber.Core\SmartTranscriber.Core.csproj" />
+    <ProjectReference Include="..\..\src\SmartTranscriber.Infrastructure\SmartTranscriber.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

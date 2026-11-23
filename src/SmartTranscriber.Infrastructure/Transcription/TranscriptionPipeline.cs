@@ -31,22 +31,60 @@ public sealed class TranscriptionPipeline(
     FfmpegAudioChunker audioChunker,
     IVoiceprintRepository voiceprints,
     IJobProgressSink progressSink,
+    JobCancellationRegistry cancellation,
     IOptions<SmartTranscriberOptions> options,
     ILogger<TranscriptionPipeline> logger)
 {
     public async Task ProcessAsync(Guid jobId, CancellationToken ct = default)
     {
-        var job = await jobs.GetByIdAsync(jobId, ct);
+        var jobCts = cancellation.Register(jobId);
+        try
+        {
+            await ProcessCoreAsync(jobId, jobCts, ct);
+        }
+        finally
+        {
+            cancellation.Remove(jobId);
+        }
+    }
+
+    private async Task ProcessCoreAsync(Guid jobId, CancellationTokenSource jobCts, CancellationToken hostCt)
+    {
+        var job = await jobs.GetByIdAsync(jobId, hostCt);
         if (job is null)
         {
             logger.LogWarning("Job {JobId} not found, skipping", jobId);
             return;
         }
 
+        if (job.Status == JobStatus.Cancelled)
+        {
+            // cancelled between the claim and cts registration — nothing to do
+            logger.LogInformation("Job {JobId} already cancelled, skipping", jobId);
+            return;
+        }
+
+        if (job.ObjectName.StartsWith(TranscriptionJob.UrlObjectPrefix, StringComparison.Ordinal))
+        {
+            // ingest placeholder — media was never uploaded; fail with a
+            // clear reason instead of a raw storage ObjectNotFoundException
+            job.Status = JobStatus.Failed;
+            job.ErrorMessage = "job has no media object — retry to re-download";
+            job.CompletedAt = DateTime.UtcNow;
+            await jobs.UpdateAsync(job, CancellationToken.None);
+            progressSink.Report(job.Id, job.Progress, JobStatus.Failed);
+            return;
+        }
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(hostCt, jobCts.Token);
+        var ct = linkedCts.Token;
+
         var tempDir = options.Value.Worker.TempDir;
+        // unique per attempt — a retried job must not collide with a file
+        // still held by the previous run's ffmpeg/sidecar
         var localPath = Path.Combine(
             string.IsNullOrWhiteSpace(tempDir) ? Path.GetTempPath() : tempDir,
-            $"st_{job.Id:N}{Path.GetExtension(job.OriginalFileName)}");
+            $"st_{job.Id:N}_{Guid.NewGuid():N}{Path.GetExtension(job.OriginalFileName)}");
 
         try
         {
@@ -146,12 +184,22 @@ public sealed class TranscriptionPipeline(
             logger.LogInformation("Job {JobId} done via {Transcriber}: {Count} segments",
                 job.Id, transcriber.Name, result.Segments.Count);
             ExportForIg(job, result.Segments);
-            await ExtractFramesAsync(job, localPath, ct);
+            await ExtractFramesAsync(job, localPath, probedMeta, ct);
             await AutoSummarizeAsync(job, result.Segments, ct);
             await AutoTagAsync(job, result.Segments, ct);
             await webhooks.NotifyJobFinishedAsync(job, ct);
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (jobCts.IsCancellationRequested)
+        {
+            // user-initiated cancel — terminal, no rethrow
+            logger.LogInformation("Job {JobId} cancelled", jobId);
+            job.Status = JobStatus.Cancelled;
+            job.CompletedAt = DateTime.UtcNow;
+            await jobs.UpdateAsync(job, CancellationToken.None);
+            progressSink.Report(job.Id, job.Progress, JobStatus.Cancelled);
+            await webhooks.NotifyJobFinishedAsync(job, CancellationToken.None);
+        }
+        catch (OperationCanceledException) when (hostCt.IsCancellationRequested)
         {
             job.Status = JobStatus.Pending;
             await jobs.UpdateAsync(job, CancellationToken.None);
@@ -356,9 +404,10 @@ public sealed class TranscriptionPipeline(
     private static readonly string[] VideoExtensions = [".mp4", ".webm", ".mkv", ".mov", ".avi"];
 
     /// <summary>Scene-detect key frames for video jobs → S3 + media_frames.</summary>
-    private async Task ExtractFramesAsync(TranscriptionJob job, string localPath, CancellationToken ct)
+    private async Task ExtractFramesAsync(TranscriptionJob job, string localPath, MediaMetadata? probedMeta, CancellationToken ct)
     {
         if (!options.Value.KeyFrames.Enabled
+            || probedMeta is { HasVideo: false }
             || !VideoExtensions.Contains(Path.GetExtension(job.OriginalFileName).ToLowerInvariant()))
         {
             return;

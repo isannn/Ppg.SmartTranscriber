@@ -15,7 +15,7 @@
 {
     <p>
         <strong>@_job.OriginalFileName</strong> — @_job.Status
-        @if (_job.Status is not ("Done" or "Failed"))
+        @if (_job.Status is not ("Done" or "Failed" or "Cancelled"))
         {
             <span class="d-inline-block align-middle" style="width:120px">
                 <span class="progress" style="height:6px">

@@ -40,6 +40,12 @@ public sealed class YtDlpMediaFetcher(IOptions<SmartTranscriberOptions> options,
         using var proc = Process.Start(psi) ?? throw new InvalidOperationException("failed to start yt-dlp");
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(cfg.TimeoutSeconds));
+        // reap the child process on cancel/timeout — WaitForExitAsync
+        // throwing alone would leave yt-dlp running detached
+        using var killReg = cts.Token.Register(() =>
+        {
+            try { proc.Kill(entireProcessTree: true); } catch { /* already exited */ }
+        });
 
         var stdout = await proc.StandardOutput.ReadToEndAsync(cts.Token);
         var stderr = await proc.StandardError.ReadToEndAsync(cts.Token);

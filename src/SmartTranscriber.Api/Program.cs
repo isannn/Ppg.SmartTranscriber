@@ -8,6 +8,7 @@ using SmartTranscriber.Api.Services;
 using SmartTranscriber.Core.Options;
 using SmartTranscriber.Core.Ports;
 using SmartTranscriber.Infrastructure;
+using SmartTranscriber.Infrastructure.Infisical;
 using SmartTranscriber.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,8 +16,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile(
     SmartTranscriber.Core.Config.JsonConfigLocator.Locate(), optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
+var infisicalKeyCount = await builder.Configuration.AddInfisicalSecretsAsync();
 
 builder.Services.AddControllers();
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+    o.MultipartBodyLengthLimit = 4L * 1024 * 1024 * 1024);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -33,11 +37,33 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<IJobProgressSink, SignalRJobProgressSink>();
 
 var app = builder.Build();
+if (infisicalKeyCount is { } infisicalCount)
+{
+    app.Logger.LogInformation(
+        "Secrets source: Infisical ({Count} keys loaded)", infisicalCount);
+}
+else
+{
+    app.Logger.LogInformation("Secrets source: environment variables");
+}
 
 var connectionString = builder.Configuration.GetSection("SmartTranscriber")["ConnectionString"];
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
-    DatabaseMigrator.Migrate(connectionString);
+    // Postgres may still be starting (e.g. docker restart) — retry instead of crashing
+    for (var attempt = 1; ; attempt++)
+    {
+        try
+        {
+            DatabaseMigrator.Migrate(connectionString);
+            break;
+        }
+        catch (Exception ex) when (attempt < 30)
+        {
+            Console.Error.WriteLine($"DB migration attempt {attempt} failed: {ex.Message}; retrying in 2s");
+            Thread.Sleep(2000);
+        }
+    }
 }
 
 app.UseSwagger();

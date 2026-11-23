@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
 
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
@@ -24,6 +25,10 @@ MEDIA_EXTENSIONS = core.MEDIA_EXTENSIONS
 # in-flight job progress: job_id -> {"frac": float, "stage": str}
 _PROGRESS: dict[str, dict] = {}
 
+# serialize the GPU pipeline: transcribe runs in the threadpool (sync def),
+# without a lock concurrent requests would fight for VRAM
+_GPU_LOCK = threading.Lock()
+
 
 @app.get("/health")
 def health() -> dict:
@@ -36,7 +41,7 @@ def progress(job_id: str) -> dict:
 
 
 @app.post("/transcribe")
-async def transcribe(
+def transcribe(
     file: UploadFile = File(...),
     model: str = Query("", description="ASR model (gigaam-* or whisper size)"),
     language: str = Query("", description="Language code, e.g. ru/en"),
@@ -51,10 +56,10 @@ async def transcribe(
     if ext and ext not in MEDIA_EXTENSIONS:
         raise HTTPException(400, f"unsupported extension: {ext}")
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with _GPU_LOCK, tempfile.TemporaryDirectory() as tmp:
         media_path = os.path.join(tmp, "input" + (ext or ".bin"))
         with open(media_path, "wb") as f:
-            f.write(await file.read())
+            f.write(file.file.read())
 
         try:
             wav_path = core.extract_audio(media_path, tmp)
